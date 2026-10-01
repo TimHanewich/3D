@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#122c32">
+  <title>Honor Home | Scene Explorer</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #122c32; color: #f4f7f5; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud { position: fixed; top: 22px; left: 22px; pointer-events: none; background: #122c32d9; border: 1px solid #ffffff24; padding: 14px 18px; border-radius: 14px; backdrop-filter: blur(12px); }
+    #hud strong { display: block; font-size: 16px; }
+    #hud span { display: block; margin-top: 5px; color: #c1d9d4; font-size: 12px; }
+    #overlay { position: fixed; inset: 0; display: grid; place-items: center; background: #071b2466; backdrop-filter: blur(5px); padding: 20px; }
+    #overlay[hidden], [hidden] { display: none !important; }
+    .card { width: min(460px, 100%); padding: 32px; background: #122c32ed; border: 1px solid #ffffff25; border-radius: 22px; box-shadow: 0 24px 80px #0005; }
+    .eyebrow { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #8ecdc0; }
+    h1 { margin: 10px 0; font-size: 34px; letter-spacing: -.04em; }
+    p { line-height: 1.6; color: #c1d9d4; font-size: 14px; }
+    #status { overflow-wrap: anywhere; }
+    .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; font-size: 13px; color: #d6e7e2; }
+    kbd { display: inline-block; background: #ffffff12; padding: 4px 7px; border: 1px solid #ffffff25; border-radius: 5px; font: inherit; }
+    button { border: 0; border-radius: 10px; background: #a6dfca; color: #102d29; padding: 13px 20px; font: 600 15px system-ui; cursor: pointer; }
+    button:disabled { opacity: .45; cursor: wait; }
+    button:focus-visible { outline: 3px solid white; outline-offset: 4px; }
+    .note { margin-bottom: 0; font-size: 12px; color: #91aaa7; }
+    #crosshair { position: fixed; left: 50%; top: 50%; width: 5px; height: 5px; transform: translate(-50%, -50%); border-radius: 50%; background: white; box-shadow: 0 0 3px #000; pointer-events: none; }
+    #footer { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 10px; background: #122c32d9; font-size: 12px; color: #d6e7e2; pointer-events: none; text-align: center; width: max-content; max-width: 95%; }
+    @media (max-width: 600px) { #hud { top: 12px; left: 12px; } .card { padding: 24px; } h1 { font-size: 28px; } }
+  </style>
+  <!-- Keep core and all addons pinned to the same Three.js release. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="hud"><strong>Honor Home</strong><span id="mode">Loading scene</span></div>
+  <div id="crosshair" hidden></div>
+  <div id="footer">WASD move · Mouse look · Shift faster · F fly/walk · R reset · Esc pause</div>
+  <div id="overlay">
+    <section class="card" aria-labelledby="title">
+      <div class="eyebrow">6278 Dry Tortugas</div>
+      <h1 id="title">Our future home.</h1>
+      <p id="status" role="status" aria-live="polite">Loading the neighborhood…</p>
+      <div class="keys">
+        <span><kbd>W A S D</kbd> Move</span><span><kbd>Mouse</kbd> Look around</span>
+        <span><kbd>Shift</kbd> Move faster</span><span><kbd>Esc</kbd> Pause</span>
+        <span><kbd>F</kbd> Fly / walk</span><span><kbd>R</kbd> Return to start</span>
+        <span><kbd>Space</kbd> Fly up</span><span><kbd>C</kbd> Fly down</span>
+      </div>
+      <button id="start" disabled>Loading…</button>
+      <p class="note">Keyboard and mouse required. Free exploration: walls do not block movement. Walk mode follows terrain and paving; fly mode lets you explore anywhere.</p>
+    </section>
+  </div>
+  <script type="module">
+    const status = document.querySelector('#status');
+    const start = document.querySelector('#start');
+    const overlay = document.querySelector('#overlay');
+    const modeLabel = document.querySelector('#mode');
+    const crosshair = document.querySelector('#crosshair');
+    let phase = 'loading';
+
+    // Catch both module-download failures and initialization/loading failures.
+    function showError(error) {
+      console.error(error);
+      phase = 'error';
+      overlay.hidden = false;
+      crosshair.hidden = true;
+      modeLabel.textContent = 'Unable to load';
+      status.textContent = 'Could not load the explorer. Serve this folder over HTTP, check your internet connection, and confirm scene.glb is beside index.html. Details: ' + (error.message || String(error));
+      start.textContent = 'Reload';
+      start.disabled = false;
+    }
+    start.addEventListener('click', () => { if (phase === 'error') location.reload(); });
+
+    async function boot() {
+      if (location.protocol === 'file:') {
+        throw new Error('Do not open index.html by double-clicking. Run: python -m http.server 8000 --directory "C:\\Users\\timh\\Downloads\\bpy\\docs" and open http://localhost:8000');
+      }
+      const [THREE, { GLTFLoader }, { PointerLockControls }, { RoomEnvironment }, { DRACOLoader }, { KTX2Loader }, { MeshoptDecoder }] = await Promise.all([
+        import('three'),
+        import('three/addons/loaders/GLTFLoader.js'),
+        import('three/addons/controls/PointerLockControls.js'),
+        import('three/addons/environments/RoomEnvironment.js'),
+        import('three/addons/loaders/DRACOLoader.js'),
+        import('three/addons/loaders/KTX2Loader.js'),
+        import('three/addons/libs/meshopt_decoder.module.js')
+      ]);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#bcdce8');
+      const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.08, 2000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      // Match the scripts' Standard/sRGB intent; do not replace exported materials.
+      renderer.toneMapping = THREE.NoToneMapping;
+      document.body.prepend(renderer.domElement);
+
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const room = new RoomEnvironment();
+      const environment = pmrem.fromScene(room, 0.04);
+      scene.environment = environment.texture;
+      scene.environmentIntensity = 0.45;
+      room.dispose();
+      pmrem.dispose();
+      scene.add(new THREE.HemisphereLight(0xe5f3ff, 0x7c8060, 1.5));
+      const sun = new THREE.DirectionalLight(0xfff3dc, 2.0);
+      sun.position.set(-30, 60, 35);
+      scene.add(sun);
+      // No shadow maps: keep the large vegetation-heavy scene responsive.
+
+      const controls = new PointerLockControls(camera, renderer.domElement);
+      const keys = new Set();
+      const groundMeshes = [];
+      const groundRay = new THREE.Raycaster();
+      const down = new THREE.Vector3(0, -1, 0);
+      const probe = new THREE.Vector3();
+      const spawn = new THREE.Vector3();
+      const lookTarget = new THREE.Vector3();
+      const eyeHeight = 1.7;
+      let flying = false;
+      let groundLevel = 0;
+      let previousTime = performance.now();
+
+      function updateMode() {
+        modeLabel.textContent = flying ? 'Fly mode · Space up / C down' : 'Walk mode · 1.7 m eye height';
+      }
+      function surfaceAt(x, z, referenceY = groundLevel) {
+        // Only terrain/paving meshes are sampled: never snap to tree crowns or roofs.
+        probe.set(x, referenceY + 1.2, z);
+        groundRay.set(probe, down);
+        groundRay.far = 6;
+        const hits = groundRay.intersectObjects(groundMeshes, false);
+        return hits.length ? hits[0].point.y : groundLevel;
+      }
+      function reset() {
+        keys.clear();
+        flying = false;
+        camera.position.copy(spawn);
+        camera.lookAt(lookTarget);
+        updateMode();
+      }
+      controls.addEventListener('lock', () => {
+        overlay.hidden = true;
+        crosshair.hidden = false;
+        keys.clear();
+        previousTime = performance.now();
+      });
+      controls.addEventListener('unlock', () => {
+        keys.clear();
+        overlay.hidden = false;
+        crosshair.hidden = true;
+        if (phase === 'ready') {
+          status.textContent = 'Paused. Ready for another look around?';
+          start.textContent = 'Continue exploring';
+        }
+      });
+      document.addEventListener('pointerlockerror', () => {
+        status.textContent = 'Mouse capture was blocked. Click again, or open this page in its own browser tab.';
+      });
+      start.addEventListener('click', () => { if (phase === 'ready') controls.lock(); });
+      renderer.domElement.addEventListener('click', () => {
+        if (phase === 'ready' && !controls.isLocked) controls.lock();
+      });
+      const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space', 'KeyC']);
+      document.addEventListener('keydown', event => {
+        if (!controls.isLocked || phase !== 'ready') return;
+        if (movementKeys.has(event.code)) { event.preventDefault(); keys.add(event.code); }
+        if (event.repeat) return;
+        if (event.code === 'KeyF') {
+          flying = !flying;
+          if (!flying) camera.position.y = surfaceAt(camera.position.x, camera.position.z) + eyeHeight;
+          updateMode();
+        }
+        if (event.code === 'KeyR') reset();
+      });
+      document.addEventListener('keyup', event => keys.delete(event.code));
+      window.addEventListener('blur', () => { keys.clear(); if (controls.isLocked) controls.unlock(); });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) { keys.clear(); if (controls.isLocked) controls.unlock(); }
+      });
+      window.addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+
+      const base = 'https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/libs/';
+      const draco = new DRACOLoader().setDecoderPath(base + 'draco/gltf/');
+      const ktx2 = new KTX2Loader().setTranscoderPath(base + 'basis/').detectSupport(renderer);
+      const loader = new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
+      let gltf;
+      try {
+        gltf = await loader.loadAsync('./scene.glb', event => {
+          if (event.lengthComputable && event.total > 0) {
+            status.textContent = 'Loading scene… ' + Math.round(event.loaded / event.total * 100) + '%';
+          } else {
+            status.textContent = 'Loading scene… ' + (event.loaded / 1048576).toFixed(1) + ' MB received';
+          }
+        });
+      } finally {
+        draco.dispose();
+        ktx2.dispose();
+      }
+      const model = gltf.scene;
+      scene.add(model);
+      model.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(model);
+      if (bounds.isEmpty()) throw new Error('The GLB contains no visible geometry.');
+      const center = bounds.getCenter(new THREE.Vector3());
+      const size = bounds.getSize(new THREE.Vector3());
+      camera.far = Math.max(1000, size.length() * 4);
+      camera.updateProjectionMatrix();
+      let foundation = null;
+      let garage = null;
+      model.traverse(object => {
+        if (!object.isMesh) return;
+        const name = object.name.replace(/_/g, ' ');
+        if (/^Main foundation/i.test(name)) foundation = object;
+        if (/^Projecting garage foundation/i.test(name)) garage = object;
+        if (/continuous cleared lots|lot frontage grass|residential road|opposite grass verge|sidewalk|driveway|entry walk|foundation|porch slab|lanai slab|threshold step|deck bed|deck pavers|coping stones|screen door landing/i.test(name)) {
+          groundMeshes.push(object);
+        }
+      });
+      // Blender's normal glTF export converts Z-up to Y-up: the street is +Z.
+      if (foundation) {
+        const houseBounds = new THREE.Box3().setFromObject(foundation);
+        groundLevel = houseBounds.min.y - 0.035;
+        const garageBounds = garage ? new THREE.Box3().setFromObject(garage) : houseBounds;
+        const garageCenterX = (garageBounds.min.x + garageBounds.max.x) / 2;
+        const houseCenterX = (houseBounds.min.x + houseBounds.max.x) / 2;
+        const entryX = garageCenterX >= houseCenterX
+          ? houseBounds.min.x + (garageBounds.min.x - houseBounds.min.x) / 2
+          : garageBounds.max.x + (houseBounds.max.x - garageBounds.max.x) / 2;
+        spawn.set(entryX, groundLevel + eyeHeight, garageBounds.max.z + 8.5);
+        lookTarget.set(houseCenterX, houseBounds.max.y + 2.0, houseBounds.max.z - 3);
+      } else {
+        groundLevel = bounds.min.y;
+        spawn.set(center.x, groundLevel + eyeHeight, bounds.max.z + 5);
+        lookTarget.set(center.x, groundLevel + 2, center.z);
+        // Unknown models have no named terrain; use a stable horizontal walk plane.
+      }
+      spawn.y = surfaceAt(spawn.x, spawn.z) + eyeHeight;
+      sun.target.position.copy(center);
+      sun.position.copy(center).add(new THREE.Vector3(-30, 60, 35));
+      scene.add(sun.target);
+      reset();
+      phase = 'ready';
+      status.textContent = 'The scene is ready. Click below, then use WASD and your mouse to explore.';
+      start.textContent = 'Explore the home';
+      start.disabled = false;
+      const mixer = gltf.animations.length ? new THREE.AnimationMixer(model) : null;
+      if (mixer) gltf.animations.forEach(clip => mixer.clipAction(clip).play());
+
+      renderer.setAnimationLoop(() => {
+        const now = performance.now();
+        const dt = Math.min((now - previousTime) / 1000, 0.05);
+        previousTime = now;
+        if (controls.isLocked) {
+          let forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
+          let right = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
+          let vertical = flying ? Number(keys.has('Space')) - Number(keys.has('KeyC')) : 0;
+          const length = Math.hypot(forward, right, vertical);
+          if (length) {
+            const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight')) ? 8 : 3;
+            const step = speed * dt / length;
+            controls.moveForward(forward * step);
+            controls.moveRight(right * step);
+            if (flying) camera.position.y += vertical * step;
+          }
+          if (!flying) {
+            const targetY = surfaceAt(camera.position.x, camera.position.z, camera.position.y - eyeHeight) + eyeHeight;
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, 1 - Math.exp(-16 * dt));
+          }
+        }
+        if (mixer) mixer.update(dt);
+        renderer.render(scene, camera);
+      });
+    }
+    boot().catch(showError);
+  </script>
+</body>
+</html>
