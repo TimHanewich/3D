@@ -25,8 +25,11 @@ REFERENCE / LIMITATIONS
   Set RIGHT_HAND_GARAGE = False to restore the brochure's left-hand layout.
   Side/rear finishes and lanai roof are inferred, not documented elevations.
   Optional lanai extension and optional ground stair window are NOT included.
-  First-floor increment: leisure, foyer, powder bath, kitchen, cafe, great room,
+  First-floor increment: den, foyer, powder bath, kitchen, cafe, great room,
   service vestibule/pantry, rear garage extension and straight stair flight.
+  den.png revision encloses the former leisure room with a solid rear wall
+  and foyer-side inward double doors near the cafe end. Existing floor/window
+  locations are retained; DEN_DOORS_OPEN controls the static door positions.
   Interior traced from honor_page-0002.jpg and fitted to the existing shell;
   small partition offsets and the entry-door alignment are adjusted to fit.
   The brochure's rear 11'4\" x 13'1\" GARAGE bay remains part of the garage.
@@ -34,7 +37,7 @@ REFERENCE / LIMITATIONS
   Ground-floor glazing is clear and entry/service doors are statically open
   by default. Upper-floor rooms remain deferred; upper glazing stays backed.
   First-floor ceiling has a real stairwell opening; no new roof or footprint.
-  Interior switches are below. No loose furniture, optional rooms or lights.
+  Interior switches are below. No loose furniture, other optional rooms or lights.
   Source reviewed only; execute and inspect in Blender before final export.
 
 Coordinates: meters; X left/right, +Y toward rear, +Z up. Front faces -Y.
@@ -96,6 +99,17 @@ GARAGE_EXTENSION_X = 3.70
 GARAGE_REAR_Y = 10.25
 SERVICE_REAR_Y = 12.05
 FOYER_X = 7.45
+# den.png: enclose the former leisure room; double doors open into the den
+# near the cafe end of the foyer. Width/height inferred to fit the existing shell.
+DEN_DOOR_WIDTH = 1.50
+DEN_DOOR_HEIGHT = 2.13
+DEN_DOOR_REAR_MARGIN = 0.20
+DEN_DOORS_OPEN = True            # Static 90-degree inward leaves; False closes both
+DEN_DOOR_Y1 = GARAGE_REAR_Y - DEN_DOOR_REAR_MARGIN
+DEN_DOOR_Y0 = DEN_DOOR_Y1 - DEN_DOOR_WIDTH
+assert FRONT + 0.205 < DEN_DOOR_Y0 < DEN_DOOR_Y1 < GARAGE_REAR_Y
+assert 0.10 < DEN_DOOR_WIDTH / 2 - 0.027
+assert DEN_DOOR_HEIGHT < INTERIOR_CEILING_Z - INTERIOR_FLOOR_Z
 STAIR_X0, STAIR_X1 = 8.82, W - 0.205
 STAIR_Y0, STAIR_Y1 = 8.68, 12.68  # upper/front landing to lower/rear stair foot
 POWDER_REAR_Y = STAIR_Y0
@@ -231,7 +245,7 @@ if BUILD_FIRST_FLOOR:
         'int_ceiling': material('Interior | matte white ceiling', (0.93, 0.93, 0.90), 0.92),
         'int_tile': material('Interior | warm light tile - inferred', (0.76, 0.74, 0.68), 0.55),
         'int_grout': material('Interior | fine warm grout', (0.57, 0.55, 0.50), 0.88),
-        'int_wood': material('Interior | pale oak leisure floor - inferred', (0.64, 0.51, 0.36), 0.65),
+        'int_wood': material('Interior | pale oak den floor - inferred', (0.64, 0.51, 0.36), 0.65),
         'int_counter': material('Interior | pale stone worktop - inferred', (0.88, 0.875, 0.84), 0.34),
         'int_ceramic': material('Interior | white sanitary ceramic', (0.94, 0.95, 0.93), 0.22),
         'int_steel': material('Interior | brushed appliance steel', (0.60, 0.62, 0.64), 0.30, metallic=0.8),
@@ -751,7 +765,7 @@ wall(Facade('Garage left', (0, 0), (0, 1), (-1, 0), FRONT), FF, GARAGE_EAVE)
 wall(Facade('Garage right return', (GARAGE_W, 0), (0, 1), (1, 0), FRONT), FF, GARAGE_EAVE)
 entry = Facade('Recessed entry', (GARAGE_W, FRONT), (1, 0), (0, -1), W - GARAGE_W)
 wall(entry, FF, UPPER_FLOOR,
-     [opening('leisure room window', 0.93, 0.92, FF + 0.58, 1.52),
+     [opening('den window', 0.93, 0.92, FF + 0.58, 1.52),
       opening('front entrance', entry_center_x - GARAGE_W, 0.965, FF, 2.44, 'entry')], lap=True)
 wall(Facade('Left main lower', (0, FRONT), (0, 1), (-1, 0), BACK - FRONT), FF, UPPER_FLOOR)
 wall(Facade('Right main lower', (W, FRONT), (0, 1), (1, 0), BACK - FRONT), FF, UPPER_FLOOR)
@@ -968,7 +982,7 @@ def interior_partition(name, a, b, doors=(), thickness=INTERIOR_WALL_T):
 def interior_floor(name, rect, wood=False, holes=()):
     x0, y0, x1, y1 = rect
     g = Geometry()
-    # Separate rectangular floor regions around the garage extension and leisure.
+    # Separate rectangular floor regions around the garage extension and den.
     def subtract(r, h):
         a, b, c, d = r
         l, f, rr, back = max(a, h[0]), max(b, h[1]), min(c, h[2]), min(d, h[3])
@@ -1065,9 +1079,9 @@ def build_first_floor():
     # The brochure explicitly labels the deep rear-left bay as GARAGE, not a den.
     # Preserve its connection to the projecting two-car garage; do not insert
     # a wall across the complete FRONT line.
-    interior_partition('garage to leisure', (GARAGE_EXTENSION_X, FRONT),
+    interior_partition('garage to den', (GARAGE_EXTENSION_X, FRONT),
                        (GARAGE_EXTENSION_X, SERVICE_REAR_Y), thickness=0.19)
-    interior_partition('garage to recessed leisure front', (GARAGE_EXTENSION_X, FRONT),
+    interior_partition('garage to recessed den front', (GARAGE_EXTENSION_X, FRONT),
                        (GARAGE_W, FRONT), thickness=0.19)
     interior_partition('garage rear mud entry', (inset, GARAGE_REAR_Y),
                        (GARAGE_EXTENSION_X, GARAGE_REAR_Y), [(0.60, 0.86, 2.13)], thickness=0.19)
@@ -1075,9 +1089,27 @@ def build_first_floor():
                        (GARAGE_EXTENSION_X, SERVICE_REAR_Y), [(0.64, 0.92, 2.13)])
     interior_partition('pantry side', (1.95, GARAGE_REAR_Y),
                        (1.95, SERVICE_REAR_Y), [(0.27, 0.83, 2.13)])
-    interior_partition('leisure rear and open foyer passage', (GARAGE_EXTENSION_X, GARAGE_REAR_Y),
-                       (STAIR_X0, GARAGE_REAR_Y),
-                       [(6.25 - GARAGE_EXTENSION_X, STAIR_X0 - 6.25, 2.44)])
+    # den.png replaces the old wide leisure-to-cafe opening with a solid wall.
+    # End the rear wall at the den/foyer junction: the foyer stays open to cafe.
+    interior_partition('den rear enclosure', (GARAGE_EXTENSION_X, GARAGE_REAR_Y),
+                       (FOYER_X, GARAGE_REAR_Y))
+    interior_partition('den to foyer double doorway', (FOYER_X, FRONT + inset),
+                       (FOYER_X, GARAGE_REAR_Y),
+                       [(DEN_DOOR_Y0 - FRONT - inset, DEN_DOOR_WIDTH, DEN_DOOR_HEIGHT)])
+    # Both leaves swing into the room (-X before the house-wide mirror), never
+    # into the foyer. A single clear opening has no central post or backing slab.
+    hinge_x = FOYER_X - half - 0.025
+    leaf_width = DEN_DOOR_WIDTH / 2 - 0.027
+    for label, hinge_y, closed_direction in (
+            ('front', DEN_DOOR_Y0 + 0.025, (0, 1, 0)),
+            ('rear', DEN_DOOR_Y1 - 0.025, (0, -1, 0))):
+        leaf = interior_door_leaf('Interior | den double door ' + label,
+                                  (hinge_x, hinge_y, z + 0.01),
+                                  (-1, 0, 0) if DEN_DOORS_OPEN else closed_direction,
+                                  leaf_width, DEN_DOOR_HEIGHT - 0.04, M['int_trim'])
+        leaf['room'] = 'Den'
+        leaf['reference'] = 'den.png; inward-opening paired doors on foyer wall'
+        leaf['open_angle_degrees'] = 90 if DEN_DOORS_OPEN else 0
     interior_partition('powder to foyer', (STAIR_X0, FRONT + inset),
                        (STAIR_X0, POWDER_REAR_Y), [(0.66, 0.76, 2.13)])
     interior_partition('powder rear below stair landing', (STAIR_X0, POWDER_REAR_Y),
@@ -1085,13 +1117,14 @@ def build_first_floor():
     interior_partition('enclosed front stair side', (STAIR_X0, POWDER_REAR_Y),
                        (STAIR_X0, GARAGE_REAR_Y))
 
-    # Tile across the open kitchen/cafe/great-room/foyer and service spaces.
-    # Leisure flooring changes at the foyer line without an invented dividing wall.
-    leisure = (GARAGE_EXTENSION_X + 0.095, FRONT + 0.095, FOYER_X, GARAGE_REAR_Y)
+    # Preserve the existing wood floor in the den and tile in the foyer.
+    # The new partition covers their old junction; flooring continues through
+    # the double doorway without a raised threshold or an uncovered strip.
+    den = (GARAGE_EXTENSION_X + 0.095, FRONT + 0.095, FOYER_X, GARAGE_REAR_Y)
     garage = (inset, FRONT, GARAGE_EXTENSION_X + 0.095, GARAGE_REAR_Y + 0.095)
     interior_floor('kitchen cafe great room foyer and service rooms',
-                   (inset, FRONT, W - inset, BACK - inset), holes=(leisure, garage))
-    interior_floor('leisure', leisure, wood=True)
+                   (inset, FRONT, W - inset, BACK - inset), holes=(den, garage))
+    interior_floor('den', den, wood=True)
     box('Interior | garage rear extension floor finish',
         (inset, FRONT, FF), (GARAGE_EXTENSION_X - 0.095, GARAGE_REAR_Y - 0.095, FF + 0.004),
         M['concrete'])
@@ -1156,8 +1189,11 @@ def build_first_floor():
     if BUILD_FIRST_FLOOR_FIXTURES:
         build_first_floor_fixtures()
     COL['first_floor_interior'] = True
-    COL['first_floor_reference'] = 'honor_page-0002.jpg, base C-1 first-floor plan; mirrored with exterior'
-    COL['first_floor_rooms'] = 'Leisure; foyer; powder bath; cafe; great room; kitchen; pantry/service vestibule; garage and rear garage extension'
+    COL['first_floor_reference'] = 'honor_page-0002.jpg with den.png enclosure revision; mirrored with exterior'
+    COL['first_floor_rooms'] = 'Den; foyer; powder bath; cafe; great room; kitchen; pantry/service vestibule; garage and rear garage extension'
+    COL['den_reference'] = 'den.png: solid rear wall and foyer-side inward double doors'
+    COL['den_door_opening_width_m'] = DEN_DOOR_WIDTH
+    COL['den_doors_open'] = DEN_DOORS_OPEN
     COL['first_floor_ceiling_height_m'] = ceiling - z
     COL['first_floor_limitations'] = 'Partitions fitted to existing shell; finishes, service-room labels, fixtures and stair details inferred. Upper-floor interior deferred.'
 
@@ -1299,7 +1335,8 @@ print('Honor FH-1 house created: %d mesh objects in %s.' % (len(COL.objects), CO
 print('Front is -Y. Unseen elevations and roof dimensions are approximations.')
 if BUILD_FIRST_FLOOR:
     print('First-floor interior added; mirrored with the right-hand garage: %s.' % RIGHT_HAND_GARAGE)
-    print('Includes rear garage bay, service/pantry rooms, leisure, foyer, powder, kitchen, cafe and great room.')
+    print('Includes rear garage bay, service/pantry rooms, enclosed den, foyer, powder, kitchen, cafe and great room.')
+    print('Den: solid rear wall and inward-opening foyer double doors; DEN_DOORS_OPEN = %s.' % DEN_DOORS_OPEN)
     print('Stair flight and ceiling opening included; upper-floor room layout is deferred.')
     print('All materials are lit. Interior finishes and stair details are inferred.')
     print('Reload honor.py in Blender and rerun; re-export the GLB to update the web scene.')
