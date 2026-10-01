@@ -74,7 +74,7 @@
       overlay.hidden = false;
       crosshair.hidden = true;
       modeLabel.textContent = 'Unable to load';
-      status.textContent = 'Could not load the explorer. Serve this folder over HTTP, check your internet connection, and confirm scene.glb is beside index.html. Details: ' + (error.message || String(error));
+      status.textContent = 'Could not load the explorer. Serve this folder over HTTP, check your internet connection, and confirm the GitHub release download is accessible. Details: ' + (error.message || String(error));
       start.textContent = 'Reload';
       start.disabled = false;
     }
@@ -200,7 +200,7 @@
       const loader = new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
       let gltf;
       try {
-        gltf = await loader.loadAsync('./scene.glb', event => {
+        gltf = await loader.loadAsync('https://github.com/TimHanewich/3D/releases/download/6077254e/scene.glb', event => {
           if (event.lengthComputable && event.total > 0) {
             status.textContent = 'Loading scene… ' + Math.round(event.loaded / event.total * 100) + '%';
           } else {
