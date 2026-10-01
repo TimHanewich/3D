@@ -162,7 +162,7 @@ def material(name, rgb, roughness=0.65, noise=0.0, metallic=0.0):
 # Roofing, glazing, factory window frames and hardware retain photo-based colors.
 # Preserve dimensions and roof profiles; RIGHT_HAND_GARAGE controls mirroring.
 PAINT_CODES = {
-    'Delicate White': {'rgb': (241, 242, 238), 'lrv': 88},
+    'Delicate White': {'rgb': (198, 198, 198), 'lrv': 88},  # User override: #C6C6C6; LRV is original reference only
     'SkyDiving': {'rgb': (198, 214, 215), 'lrv': 65},
     'Witchcraft': {'rgb': (71, 76, 80), 'lrv': 7},
 }
