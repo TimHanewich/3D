@@ -19,7 +19,10 @@ REFERENCE / LIMITATIONS
   Shutter/bracket paint placement inferred from coloring.jpeg; doors per user.
   Roof, glazing, factory window frames and hardware remain photo approximations.
   LRV values stored as metadata; appearance still depends on lighting/display.
-  Only colors/material assignments changed; the original geometry is retained.
+  Right-hand garage variant: the full exterior is mirrored across X = W / 2.
+  Garage is on the right and entry on the left when viewed from the street.
+  Dimensions, details and paint assignments are preserved; no negative scales.
+  Set RIGHT_HAND_GARAGE = False to restore the brochure's left-hand layout.
   Side/rear finishes and lanai roof are inferred, not documented elevations.
   Optional lanai extension and optional ground stair window are NOT included.
   Exterior shell only: backed glazing and closed doors; no interior layout.
@@ -39,6 +42,7 @@ from mathutils import Vector
 # --------------------------- adjustable dimensions ---------------------------
 COLLECTION_NAME = 'HONOR_FH1'
 TAG = 'honor_fh1_generated'
+RIGHT_HAND_GARAGE = True         # viewed from the street; False restores brochure layout
 W = 10.06
 GARAGE_W = 5.97
 FRONT = 6.24                     # front of two-story main block
@@ -87,6 +91,7 @@ bpy.context.scene.collection.children.link(COL)
 COL['reference'] = 'Honor brochure FH-1 rendering; C-1 plan for approximate footprint'
 COL['units'] = 'Geometry is in meters; scene unit settings are not modified'
 COL['accuracy_note'] = 'Roof pitches and unseen elevations are inferred, not surveyed'
+COL['garage_side_from_street'] = 'right' if RIGHT_HAND_GARAGE else 'left'
 
 
 def linear(c):
@@ -124,7 +129,7 @@ def material(name, rgb, roughness=0.65, noise=0.0, metallic=0.0):
 # SkyDiving on entry / Witchcraft on garage follow the user's recollection.
 # Witchcraft on shutters and gable brackets is inferred from coloring.jpeg.
 # Roofing, glazing, factory window frames and hardware retain photo-based colors.
-# Keep all geometry, roof profiles and garage-left orientation unchanged.
+# Preserve dimensions and roof profiles; RIGHT_HAND_GARAGE controls mirroring.
 PAINT_CODES = {
     'Delicate White': {'rgb': (241, 242, 238), 'lrv': 88},
     'SkyDiving': {'rgb': (198, 214, 215), 'lrv': 65},
@@ -211,8 +216,19 @@ class Geometry:
             return None
         if not isinstance(materials, (list, tuple)):
             materials = [materials]
+        # All builders emit world-aligned coordinates. Mirror at this one output
+        # point so roofs, openings, trim, hardware and lanai stay in registration.
+        # Bake X -> W - X into mesh data, not a negative object scale. Reverse
+        # winding for the reflection, then run the normal correction below.
+        vertices, faces = self.vertices, self.faces
+        if RIGHT_HAND_GARAGE:
+            vertices = [(W - x, y, z) for x, y, z in self.vertices]
+            faces = [tuple(reversed(face)) for face in self.faces]
+            side_names = {'left': 'right', 'right': 'left',
+                          'Left': 'Right', 'Right': 'Left'}
+            name = ' '.join(side_names.get(word, word) for word in name.split(' '))
         mesh = bpy.data.meshes.new(name + ' mesh')
-        mesh.from_pydata(self.vertices, [], self.faces)
+        mesh.from_pydata(vertices, [], faces)
         mesh.update()
         for mat in materials:
             mesh.materials.append(mat)
