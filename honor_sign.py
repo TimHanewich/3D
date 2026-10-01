@@ -2,7 +2,7 @@
 
 Run this file in Blender's Text Editor after the house and environment scripts.
 Creates a white, dark-trimmed two-post sign facing the street (-Y):
-    6278 Dry Tortugas
+
     Our future home!
 
 Only this script's HONOR_SIGN collection is replaced on rerun. No existing
@@ -25,7 +25,7 @@ from mathutils import Matrix, Vector
 # ------------------------------ user controls -------------------------------
 COLLECTION_NAME = 'HONOR_SIGN'
 OWNER = 'honor_sign_generated'
-LINE_1 = '6278 Dry Tortugas'
+SIGN_TEXT = 'Our future home!'
 LINE_2 = 'Our future home!'
 SIGN_WIDTH = 1.90
 SIGN_HEIGHT = 0.85
@@ -149,7 +149,7 @@ for library in (bpy.data.meshes, bpy.data.curves, bpy.data.materials):
 
 COL = bpy.data.collections.new(COLLECTION_NAME)
 COL[OWNER] = True
-COL['wording'] = LINE_1 + '\n' + LINE_2
+COL['wording'] = SIGN_TEXT
 COL['placement'] = 'Front lawn, street-facing; visual placement only'
 bpy.context.scene.collection.children.link(COL)
 
@@ -264,8 +264,8 @@ def lettering(name, body, center_z, max_width, max_height, mat):
     return obj
 
 
-lettering('address', LINE_1, bottom + h * 0.69, w - 0.20, h * 0.23, DARK)
-lettering('future home message', LINE_2, bottom + h * 0.27, w - 0.28, h * 0.19, ACCENT)
+
+lettering('future home message', SIGN_TEXT, bottom + h * 0.50, w - 0.20, h * 0.40, ACCENT)
 
 
 # ---------------------------- left-hand photo sign --------------------------
@@ -317,7 +317,7 @@ for image in list(bpy.data.images):
         bpy.data.images.remove(image)
 
 bpy.context.view_layer.update()
-print('Honor front-lawn signs added: ' + LINE_1 + ' / ' + LINE_2)
+print('Honor front-lawn signs added: ' + SIGN_TEXT)
 print('Photo sign placed to the left: ' + PHOTO_PATH)
 print('Existing models untouched. Rerun to replace only these signs.')
 print('All materials are lit; photograph retained.')
