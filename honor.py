@@ -49,7 +49,10 @@ REFERENCE / LIMITATIONS
   drywall half-walls replace the flight and loft-edge balusters/wood rails.
   Carpet color and half-wall height are placeholders adjustable below. The
   lower side closure and powder clearance are retained; both arrivals stay open.
-  Other room flooring is unchanged. No new roof or footprint.
+  User flooring revision: the former upstairs oak planks are used throughout
+  downstairs indoor rooms; all upstairs room floors and stairs use matching
+  carpet, including upstairs bath/utility/closet floors. Shower/tub surfaces,
+  garage, porch and lanai remain unchanged. No new roof or footprint.
   Optional master bath and tray ceiling are omitted. Refrigerator and laundry
   appliances are optional and disabled; utility connections/HVAC are inferred.
   SECOND_FLOOR_CUTAWAY omits main roof/soffits and upper ceiling for inspection;
@@ -350,7 +353,7 @@ if BUILD_FIRST_FLOOR or BUILD_SECOND_FLOOR:
         'int_tile': material('Interior | warm light tile - inferred', (0.76, 0.74, 0.68), 0.55),
         'int_grout': material('Interior | fine warm grout', (0.57, 0.55, 0.50), 0.88),
         'int_wood': material('Interior | pale oak floors and cabinetry - inferred', (0.64, 0.51, 0.36), 0.65),
-        'int_carpet': material('Interior | stair carpet - neutral color placeholder',
+        'int_carpet': material('Interior | upstairs and stair carpet - neutral color placeholder',
                                STAIR_CARPET_RGB, 0.98, noise=0.002),
         'int_counter': material('Interior | pale stone worktop - inferred', (0.88, 0.875, 0.84), 0.34),
         'int_ceramic': material('Interior | white sanitary ceramic', (0.94, 0.95, 0.93), 0.22),
@@ -1139,13 +1142,26 @@ def subtract_rect(rect, hole):
 
 
 def interior_floor(name, rect, wood=False, holes=(),
-                   slab_z=FF, floor_z=INTERIOR_FLOOR_Z):
+                   slab_z=FF, floor_z=INTERIOR_FLOOR_Z, carpet=False):
     x0, y0, x1, y1 = rect
     assert x0 < x1 and y0 < y1 and slab_z < floor_z - 0.006
+    assert not (wood and carpet), 'Choose one floor finish'
     g = Geometry()
     regions = [rect]
     for hole in holes:
         regions = [piece for r in regions for piece in subtract_rect(r, hole)]
+    if carpet:
+        # Continuous broadloom, not carpet-colored planks or tiles. Retain all
+        # room exclusions and the stair opening through the full finish depth.
+        for a, b, c, d in regions:
+            g.box((a, b, slab_z), (c, d, floor_z))
+        obj = g.finish('Interior | ' + name + ' continuous carpet floor', M['int_carpet'])
+        if obj:
+            obj['room'] = name
+            obj['walkable'] = True
+            obj['finish'] = 'Carpet'
+            obj['finish_note'] = 'User requested; matches stair carpet; neutral color placeholder'
+        return obj
     for a, b, c, d in regions:
         g.box((a, b, slab_z), (c, d, floor_z - 0.006))
     g.finish('Interior | ' + name + ' floor joint bed', M['int_grout'])
@@ -1172,7 +1188,9 @@ def interior_floor(name, rect, wood=False, holes=(),
     if obj:
         obj['room'] = name
         obj['walkable'] = True
-        obj['finish_note'] = 'Inferred finish; brochure gives layout, not material selections'
+        obj['finish'] = 'Oak planks' if wood else 'Tile'
+        obj['finish_note'] = ('User requested downstairs oak planks matching the former upstairs finish'
+                              if wood else 'Inferred finish; brochure gives layout, not material selections')
     return obj
 
 
@@ -1298,13 +1316,13 @@ def build_first_floor():
                           (STAIR_X0 - half, y1, z1 - 0.012)], (0, 0, 0.012))
         soffit.finish('Interior | powder sloping ceiling beneath stairs', M['int_ceiling'])
 
-    # Preserve the existing wood floor in the den and tile in the foyer.
-    # The new partition covers their old junction; flooring continues through
-    # the double doorway without a raised threshold or an uncovered strip.
+    # User flooring revision: reuse the former upstairs oak plank material,
+    # board size and stagger downstairs, including kitchen, foyer and powder.
+    # Preserve room masks, finished elevations and the concrete garage bay.
     den = (GARAGE_EXTENSION_X + 0.095, FRONT + 0.095, FOYER_X, GARAGE_REAR_Y)
     garage = (inset, FRONT, GARAGE_EXTENSION_X + 0.095, GARAGE_REAR_Y + 0.095)
-    interior_floor('kitchen cafe great room foyer and service rooms',
-                   (inset, FRONT, W - inset, BACK - inset), holes=(den, garage))
+    interior_floor('kitchen cafe great room foyer powder and service rooms',
+                   (inset, FRONT, W - inset, BACK - inset), wood=True, holes=(den, garage))
     interior_floor('den', den, wood=True)
     box('Interior | garage rear extension floor finish',
         (inset, FRONT, FF), (GARAGE_EXTENSION_X - 0.095, GARAGE_REAR_Y - 0.095, FF + 0.004),
@@ -1410,6 +1428,7 @@ def build_first_floor():
     if BUILD_FIRST_FLOOR_FIXTURES:
         build_first_floor_fixtures()
     COL['first_floor_interior'] = True
+    COL['first_floor_finish'] = 'User requested former upstairs oak planks throughout downstairs indoor rooms; garage unchanged'
     COL['first_floor_reference'] = 'honor_page-0002.jpg with den.png enclosure revision; mirrored with exterior'
     COL['first_floor_rooms'] = 'Den; foyer; powder bath; cafe; great room; kitchen; pantry/service vestibule; garage and rear garage extension'
     COL['den_reference'] = 'den.png: solid rear wall and foyer-side inward double doors'
@@ -1865,25 +1884,27 @@ def build_second_floor():
     master_closet = (UP_MASTER_CLOSET_X, UP_MASTER_FRONT,
                      UP_MASTER_CLOSET_END_X, UP_MASTER_CLOSET_REAR)
     bedroom3_hall = (UP_REACHIN_X, UP_CLOSET_SPLIT, bx, UP_HALL_REAR)
-    # Floor regions meet under wall centerlines; holes also remove all joint beds.
+    # User requested ALL upstairs room floors carpeted, including bath, utility
+    # and closet floors. Shower/tub surfaces remain their separate fixtures.
+    # Room regions and full-depth stair exclusions are otherwise unchanged.
     rooms = [
-        ('Bedroom 2', (inset, front, bx, UP_BED2_REAR), True, (), '11 ft 2 in x 10 ft 10 in'),
-        ('Bedroom 2 closet', (inset, UP_BED2_REAR, UP_REACHIN_X, UP_CLOSET_SPLIT), True, (), ''),
-        ('Bedroom 3', (inset, UP_CLOSET_SPLIT, bx, UP_BED3_REAR), True,
+        ('Bedroom 2', (inset, front, bx, UP_BED2_REAR), (), '11 ft 2 in x 10 ft 10 in'),
+        ('Bedroom 2 closet', (inset, UP_BED2_REAR, UP_REACHIN_X, UP_CLOSET_SPLIT), (), ''),
+        ('Bedroom 3', (inset, UP_CLOSET_SPLIT, bx, UP_BED3_REAR),
          (closet3, bedroom3_hall), '11 ft 2 in x 10 ft 9 in'),
-        ('Bedroom 3 closet', closet3, True, (), ''),
-        ('Bath 2', (bx, front, UP_BATH2_X, UP_BED2_REAR), False, (), ''),
-        ('Utility', (bx, UP_HALL_REAR, sx, UP_UTILITY_REAR), False, (), ''),
-        ('HVAC', (bx, UP_UTILITY_REAR, sx, UP_HVAC_REAR), False, (), ''),
-        ('Master WC', wc, False, (), ''),
-        ('Master walk-in closet', (inset, UP_BED3_REAR, UP_WIC_X, rear), True, (), ''),
-        ('Master bath', (UP_WIC_X, UP_BED3_REAR, sx, rear), False, (wc,), ''),
-        ('Master bedroom', (sx, UP_MASTER_FRONT, W - inset, rear), True,
+        ('Bedroom 3 closet', closet3, (), ''),
+        ('Bath 2', (bx, front, UP_BATH2_X, UP_BED2_REAR), (), ''),
+        ('Utility', (bx, UP_HALL_REAR, sx, UP_UTILITY_REAR), (), ''),
+        ('HVAC', (bx, UP_UTILITY_REAR, sx, UP_HVAC_REAR), (), ''),
+        ('Master WC', wc, (), ''),
+        ('Master walk-in closet', (inset, UP_BED3_REAR, UP_WIC_X, rear), (), ''),
+        ('Master bath', (UP_WIC_X, UP_BED3_REAR, sx, rear), (wc,), ''),
+        ('Master bedroom', (sx, UP_MASTER_FRONT, W - inset, rear),
          (master_closet,), '13 ft 9 in x 15 ft 1 in'),
-        ('Master reach-in closet', master_closet, True, (), ''),
+        ('Master reach-in closet', master_closet, (), ''),
     ]
     covered = []
-    for name, rect, wood, holes, brochure_size in rooms:
+    for name, rect, holes, brochure_size in rooms:
         pieces = [rect]
         for hole in holes:
             pieces = [p for r in pieces for p in subtract_rect(r, hole)]
@@ -1891,8 +1912,8 @@ def build_second_floor():
             assert not rectangles_overlap(piece, STAIR_HOLE), name + ' overlaps stair opening'
             assert not any(rectangles_overlap(piece, r) for r in covered), name + ' floor overlap'
         covered.extend(pieces)
-        obj = interior_floor('Upper | ' + name, rect, wood, holes,
-                             slab_z=UPPER_FLOOR, floor_z=z)
+        obj = interior_floor('Upper | ' + name, rect, holes=holes,
+                             slab_z=UPPER_FLOOR, floor_z=z, carpet=True)
         if obj:
             obj['room'] = name
             obj['brochure_room_size_reference'] = brochure_size
@@ -1901,8 +1922,8 @@ def build_second_floor():
     if not BUILD_FIRST_FLOOR:
         build_stair_landing()  # Carpet stays consistent in upper-floor-only mode.
     loft = interior_floor('Upper | loft and connecting hall',
-                          (inset, front, W - inset, rear), True, exclusions,
-                          slab_z=UPPER_FLOOR, floor_z=z)
+                          (inset, front, W - inset, rear), holes=exclusions,
+                          slab_z=UPPER_FLOOR, floor_z=z, carpet=True)
     loft['room'] = 'Loft and hall'
     loft['brochure_room_size_reference'] = 'Loft: 11 ft 0 in x 16 ft 0 in'
 
@@ -1923,6 +1944,7 @@ def build_second_floor():
             obj['floor_level'] = 2
             obj['reference'] = 'honor_page-0002.jpg main upper plan; standard bath; mirrored with shell'
     COL['second_floor_interior'] = True
+    COL['second_floor_finish'] = 'User requested matching carpet in all upstairs rooms, halls and closets; shower/tub surfaces unchanged'
     COL['second_floor_rooms'] = '; '.join(room[0] for room in rooms) + '; Loft and hall'
     COL['second_floor_ceiling_height_m'] = SECOND_CEILING_Z - z
     COL['second_floor_doors_open'] = SECOND_FLOOR_OPEN_DOORS
@@ -1946,12 +1968,14 @@ print('Front is -Y. Unseen elevations and roof dimensions are approximations.')
 if BUILD_FIRST_FLOOR:
     print('First-floor interior added; mirrored with the right-hand garage: %s.' % RIGHT_HAND_GARAGE)
     print('Includes rear garage bay, service/pantry rooms, enclosed den, foyer, powder, kitchen, cafe and great room.')
+    print('Downstairs indoor flooring: former upstairs oak planks; garage, porch and lanai unchanged.')
     print('Den: solid rear wall and inward-opening foyer double doors; DEN_DOORS_OPEN = %s.' % DEN_DOORS_OPEN)
     print('Plan-aligned stairs: carpeted treads, risers and landing; solid drywall separators, no balusters.')
     print('Neutral carpet color and drywall half-wall height are placeholders; powder clearance retained.')
     print('Optional kitchen refrigerator: %s.' % FIRST_FLOOR_REFRIGERATOR)
 if BUILD_SECOND_FLOOR:
     print('Second floor: master suite, bedrooms 2/3, bath 2, closets, utility, HVAC and loft.')
+    print('All upstairs room floors and stairs: matching carpet; shower/tub surfaces unchanged.')
     print('Upper ceiling: 8 ft 8 in. Standard master bath; optional appliances: %s.' % SECOND_FLOOR_LAUNDRY_APPLIANCES)
     print('Room sizes fitted to the FH-1 shell; straight master boundary and full-width reach-in closet.')
     if SECOND_FLOOR_CUTAWAY:
