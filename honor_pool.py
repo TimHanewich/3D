@@ -39,7 +39,8 @@ from mathutils import Vector, Matrix
 
 
 # ------------------------------- user switches -------------------------------
-BUILD_SCREEN_ENCLOSURE = True     # False gives the unobstructed supplied render view
+BUILD_SCREEN_ENCLOSURE = True     # Keep the cage structure and door frames
+BUILD_SCREEN_MESH = False         # No cage screen sheets; open structure for GLB export
 BUILD_CHILD_BARRIER = False       # Child barrier omitted at user's request
 BUILD_EQUIPMENT = True
 BUILD_WATER = True
@@ -323,6 +324,10 @@ class Geo:
                    (0, 0, z1 - z0), index)
 
     def finish(self, name, materials, group, bevel=0.0, uv=False, smooth=False):
+        # Omit only cage screen sheets, not bronze framing or door kick plates.
+        # This covers wall, door, lanai-flank and roof mesh panels.
+        if group == 'Screen enclosure' and materials is M['screen'] and not BUILD_SCREEN_MESH:
+            return None
         if not self.f:
             return None
         if not isinstance(materials, (list, tuple)):
