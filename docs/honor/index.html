@@ -59,7 +59,7 @@
         <span><kbd>Space</kbd> Fly up</span><span><kbd>C</kbd> Fly down</span>
       </div>
       <button id="start" disabled>Loading…</button>
-      <p class="note">Keyboard and mouse required. Free exploration: walls do not block movement. Walk mode follows terrain and paving; fly mode lets you explore anywhere.</p>
+      <p class="note">Keyboard and mouse required. Free exploration: walls do not block movement. Walk mode follows terrain, floors and stairs beneath your feet; fly mode lets you explore anywhere.</p>
     </section>
   </div>
   <script type="module">
@@ -148,31 +148,60 @@
       const controls = new PointerLockControls(camera, renderer.domElement);
       const keys = new Set();
       const groundMeshes = [];
+      const groundBounds = new WeakMap();
+      const groundCandidates = [];
+      const groundHits = [];
       const groundRay = new THREE.Raycaster();
+      const groundNormal = new THREE.Vector3();
+      const groundNormalMatrix = new THREE.Matrix3();
       const down = new THREE.Vector3(0, -1, 0);
       const probe = new THREE.Vector3();
       const spawn = new THREE.Vector3();
       const lookTarget = new THREE.Vector3();
       const eyeHeight = 1.7;
+      const maxStepHeight = 0.24; // Honor risers are about 0.18 m; do not grab ceilings.
+      const maxWalkSubstep = 0.06; // Sample every tread even while sprinting.
       let flying = false;
       let groundLevel = 0;
+      let feetY = 0; // Physical support height, independent of camera smoothing.
       let previousTime = performance.now();
 
       function updateMode() {
         modeLabel.textContent = flying ? 'Fly mode · Space up / C down' : 'Walk mode · 1.7 m eye height';
       }
       function surfaceAt(x, z, referenceY = groundLevel) {
-        // Only terrain/paving meshes are sampled: never snap to tree crowns or roofs.
-        probe.set(x, referenceY + 1.2, z);
+        // Start just one riser above the feet, not above the camera. This keeps
+        // the upstairs floor from pulling a downstairs visitor through the ceiling.
+        const rayTop = referenceY + maxStepHeight + 0.001;
+        groundCandidates.length = 0;
+        for (const mesh of groundMeshes) {
+          const bounds = groundBounds.get(mesh);
+          if (x >= bounds.min.x - 0.001 && x <= bounds.max.x + 0.001
+              && z >= bounds.min.z - 0.001 && z <= bounds.max.z + 0.001
+              && bounds.min.y <= rayTop) groundCandidates.push(mesh);
+        }
+        probe.set(x, rayTop, z);
         groundRay.set(probe, down);
-        groundRay.far = 6;
-        const hits = groundRay.intersectObjects(groundMeshes, false);
-        return hits.length ? hits[0].point.y : groundLevel;
+        groundRay.far = Math.max(6, rayTop - groundLevel + 2);
+        groundHits.length = 0;
+        groundRay.intersectObjects(groundCandidates, false, groundHits);
+        for (const hit of groundHits) {
+          if (!hit.face) continue;
+          groundNormalMatrix.getNormalMatrix(hit.object.matrixWorld);
+          groundNormal.copy(hit.face.normal).applyNormalMatrix(groundNormalMatrix).normalize();
+          // Only upward-facing walking surfaces, never risers or slab undersides.
+          if (groundNormal.y > 0.5 && hit.point.y <= rayTop) return hit.point.y;
+        }
+        return groundLevel;
+      }
+      function settleFeet() {
+        feetY = surfaceAt(camera.position.x, camera.position.z, feetY);
       }
       function reset() {
         keys.clear();
         flying = false;
         camera.position.copy(spawn);
+        feetY = spawn.y - eyeHeight;
         camera.lookAt(lookTarget);
         updateMode();
       }
@@ -205,7 +234,11 @@
         if (event.repeat) return;
         if (event.code === 'KeyF') {
           flying = !flying;
-          if (!flying) camera.position.y = surfaceAt(camera.position.x, camera.position.z) + eyeHeight;
+          if (!flying) {
+            feetY = camera.position.y - eyeHeight;
+            settleFeet();
+            camera.position.y = feetY + eyeHeight;
+          }
           updateMode();
         }
         if (event.code === 'KeyR') reset();
@@ -257,8 +290,15 @@
         const name = object.name.replace(/_/g, ' ');
         if (/^Main foundation/i.test(name)) foundation = object;
         if (/^Projecting garage foundation/i.test(name)) garage = object;
-        if (/continuous cleared lots|lot frontage grass|residential road|opposite grass verge|sidewalk|driveway|entry walk|foundation|porch slab|lanai slab|threshold step|deck bed|deck pavers|coping stones|screen door landing/i.test(name)) {
+        // Use explicit floor/stair names when custom properties were not exported.
+        // Do not add all house meshes: roofs, counters and ceilings are not floors.
+        const terrain = /continuous cleared lots|lot frontage grass|residential road|opposite grass verge|sidewalk|driveway|entry walk|foundation|porch slab|lanai slab|threshold step|deck bed|deck pavers|coping stones|screen door landing/i.test(name);
+        const floorOrStairs = /floor planks|floor tiles|floor joint bed|continuous carpet floor|floor finish|shared upper floor plate|stair.*treads|stair.*landing|garage access threshold|door threshold/i.test(name);
+        if (object.userData.walkable === true || terrain || floorOrStairs) {
           groundMeshes.push(object);
+          // These walking meshes are static. Broad-phase bounds keep each foot
+          // probe from testing triangles across the whole neighborhood.
+          groundBounds.set(object, new THREE.Box3().setFromObject(object));
         }
       });
       // Blender's normal glTF export converts Z-up to Y-up: the street is +Z.
@@ -303,12 +343,25 @@
           if (length) {
             const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight')) ? 8 : 3;
             const step = speed * dt / length;
-            controls.moveForward(forward * step);
-            controls.moveRight(right * step);
-            if (flying) camera.position.y += vertical * step;
+            if (flying) {
+              controls.moveForward(forward * step);
+              controls.moveRight(right * step);
+              camera.position.y += vertical * step;
+            } else {
+              const distance = Math.hypot(forward, right) * step;
+              const substeps = Math.max(1, Math.ceil(distance / maxWalkSubstep));
+              for (let i = 0; i < substeps; i++) {
+                controls.moveForward(forward * step / substeps);
+                controls.moveRight(right * step / substeps);
+                settleFeet();
+              }
+            }
           }
           if (!flying) {
-            const targetY = surfaceAt(camera.position.x, camera.position.z, camera.position.y - eyeHeight) + eyeHeight;
+            settleFeet();
+            // Smooth the view only; stair detection uses the actual feet height
+            // so camera lag cannot prevent the next riser from being detected.
+            const targetY = feetY + eyeHeight;
             camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, 1 - Math.exp(-16 * dt));
           }
         }
