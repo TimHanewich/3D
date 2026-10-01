@@ -1,7 +1,10 @@
 """Honor environment — aerial-inspired companion to house and pool.
 
 RUN: honor_exterior.py, then honor_pool.py, then this file in Blender's Text Editor.
-No add-ons, external textures, downloads, cameras, lights or render changes.
+No add-ons, external textures, downloads, cameras or lights.
+FLAT_COLORS defaults to True: unlit Solid material swatches, no procedural mixing.
+Sets scene-wide Standard/sRGB color management; no companion script required.
+Matches swatches, not Solid studio-light shading. Set False for lit materials.
 Rerunning replaces ONLY owned HONOR_ENVIRONMENT data. Existing house/pool objects
 and materials are read, never changed. Intended for Blender 3.6+.
 
@@ -174,6 +177,31 @@ for name in ('Ground and open lots', 'Street and access', 'Preserve trees', 'Pre
 
 
 # ------------------------ procedural earthy materials ------------------------
+# Built-in Solid-swatch appearance. False restores procedural lit materials.
+FLAT_COLORS = True
+
+if FLAT_COLORS:
+    scene = bpy.context.scene
+    scene.display_settings.display_device = 'sRGB'
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.gamma = 1.0
+    scene.view_settings.use_curve_mapping = False
+    if hasattr(scene.view_settings, 'use_white_balance'):
+        scene.view_settings.use_white_balance = False
+
+
+def flat_shader(mat):
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    shader = nodes.new('ShaderNodeEmission')
+    shader.name = 'Honor | flat swatch'
+    shader.inputs['Color'].default_value = tuple(mat.diffuse_color)
+    shader.inputs['Strength'].default_value = 1.0
+    links.new(shader.outputs[0], nodes.get('Material Output').inputs['Surface'])
+    return shader
+
+
 def linear(v):
     return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
 
@@ -187,6 +215,9 @@ def material(name, rgb, second=None, scale=1.0, bump=0.0):
     mat[OWNER] = True
     mat.use_nodes = True
     mat.diffuse_color = rgba(rgb)
+    if FLAT_COLORS:
+        flat_shader(mat)
+        return mat
     nodes, links = mat.node_tree.nodes, mat.node_tree.links
     bsdf = nodes.get('Principled BSDF')
     bsdf.inputs['Base Color'].default_value = rgba(rgb)
@@ -621,4 +652,5 @@ bpy.context.view_layer.update()
 progress('Done: %d trees, %d brush clumps. House/pool data untouched.' %
          (counts['trees'], counts['brush']))
 progress('All layout dimensions are estimates; adjust controls at the top as needed.')
-progress('No camera, lighting, world, unit, selection or render settings changed.')
+progress('No camera, lighting, world, unit or selection changes.')
+progress('Built-in flat colors: %s; Standard/sRGB applied when enabled.' % FLAT_COLORS)

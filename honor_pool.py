@@ -3,7 +3,11 @@
 RUN: Run the house script first, then run this file in Blender's Text Editor.
 This file NEVER imports, executes, edits, deletes or recolors the house. It only
 replaces its own HONOR_POOL collection when rerun. No cameras, lights, ground
-plane, landscaping, simulations, external textures or render settings are added.
+plane, landscaping, simulations or external textures are added.
+FLAT_COLORS defaults to True: unlit Solid material swatches; water is opaque.
+Sets scene-wide Standard/sRGB color management; no companion script required.
+Cage structure is retained without screen sheets by default.
+Matches swatches, not Solid studio-light shading. Set False for lit materials.
 
 REFERENCE: supplied pool_specs.jpg, pool1.jpeg and pool2.jpeg.
 Plan dimensions govern geometry; renders govern approximate finishes.
@@ -150,6 +154,31 @@ for name in ('Basin', 'Deck and coping', 'Water', 'Waterfall feature',
 
 
 # -------------------------------- materials ----------------------------------
+# Built-in Solid-swatch appearance. Water is opaque in flat-color mode.
+FLAT_COLORS = True
+
+if FLAT_COLORS:
+    scene = bpy.context.scene
+    scene.display_settings.display_device = 'sRGB'
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.gamma = 1.0
+    scene.view_settings.use_curve_mapping = False
+    if hasattr(scene.view_settings, 'use_white_balance'):
+        scene.view_settings.use_white_balance = False
+
+
+def flat_shader(mat):
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    shader = nodes.new('ShaderNodeEmission')
+    shader.name = 'Honor | flat swatch'
+    shader.inputs['Color'].default_value = tuple(mat.diffuse_color)
+    shader.inputs['Strength'].default_value = 1.0
+    links.new(shader.outputs[0], nodes.get('Material Output').inputs['Surface'])
+    return shader
+
+
 def linear(v):
     return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
 
@@ -163,6 +192,9 @@ def material(name, rgb, roughness=0.6, noise=0.0, metallic=0.0):
     mat[OWNER] = True
     mat.use_nodes = True
     mat.diffuse_color = color(rgb)
+    if FLAT_COLORS:
+        flat_shader(mat)
+        return mat
     bsdf = mat.node_tree.nodes.get('Principled BSDF')
     bsdf.inputs['Base Color'].default_value = color(rgb)
     bsdf.inputs['Roughness'].default_value = roughness
@@ -205,6 +237,8 @@ TILES = [material('blue waterline ceramic %02d' % i, (0.16 * f, 0.30 * f, 0.405 
 
 def water_material(name, volume=False):
     mat = material(name, (0.94, 0.985, 1.0), 0.10)
+    if FLAT_COLORS:
+        return mat
     nodes, links = mat.node_tree.nodes, mat.node_tree.links
     bsdf = nodes.get('Principled BSDF')
     socket = bsdf.inputs.get('Transmission Weight')
@@ -267,13 +301,16 @@ def screen_material():
     mix = nodes.new('ShaderNodeMixShader')
     links.new(combine.outputs[0], mix.inputs[0])
     links.new(transparent.outputs[0], mix.inputs[1])
-    links.new(nodes.get('Principled BSDF').outputs[0], mix.inputs[2])
+    strand_shader = nodes.get('Honor | flat swatch') if FLAT_COLORS else nodes.get('Principled BSDF')
+    links.new(strand_shader.outputs[0], mix.inputs[2])
     links.new(mix.outputs[0], nodes.get('Material Output').inputs['Surface'])
     if hasattr(mat, 'surface_render_method'):
         mat.surface_render_method = 'DITHERED'
     elif hasattr(mat, 'blend_method'):
         mat.blend_method = 'HASHED'
     mat.diffuse_color = (0.04, 0.035, 0.03, 0.12)
+    if FLAT_COLORS:
+        strand_shader.inputs['Color'].default_value = tuple(mat.diffuse_color)
     return mat
 
 

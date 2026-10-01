@@ -29,7 +29,10 @@ REFERENCE / LIMITATIONS
 
 Coordinates: meters; X left/right, +Y toward rear, +Z up. Front faces -Y.
 Designed for Blender 3.6+ using direct mesh creation, not context-sensitive ops.
-No cameras, lights, ground plane, landscaping, world or render/view changes.
+No cameras, lights, ground plane, landscaping or world changes.
+FLAT_COLORS defaults to True: unlit Solid material swatches, no reflections.
+Sets scene-wide Standard/sRGB color management; no companion script required.
+Matches swatches, not Solid studio-light shading. Set False for lit materials.
 """
 
 import math
@@ -94,6 +97,31 @@ COL['accuracy_note'] = 'Roof pitches and unseen elevations are inferred, not sur
 COL['garage_side_from_street'] = 'right' if RIGHT_HAND_GARAGE else 'left'
 
 
+# Built-in Solid-swatch appearance. False restores the original lit materials.
+FLAT_COLORS = True
+
+if FLAT_COLORS:
+    scene = bpy.context.scene
+    scene.display_settings.display_device = 'sRGB'
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.gamma = 1.0
+    scene.view_settings.use_curve_mapping = False
+    if hasattr(scene.view_settings, 'use_white_balance'):
+        scene.view_settings.use_white_balance = False
+
+
+def flat_shader(mat):
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    shader = nodes.new('ShaderNodeEmission')
+    shader.name = 'Honor | flat swatch'
+    shader.inputs['Color'].default_value = tuple(mat.diffuse_color)
+    shader.inputs['Strength'].default_value = 1.0
+    links.new(shader.outputs[0], nodes.get('Material Output').inputs['Surface'])
+    return shader
+
+
 def linear(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
@@ -104,6 +132,9 @@ def material(name, rgb, roughness=0.65, noise=0.0, metallic=0.0):
     mat.use_nodes = True
     rgba = tuple(linear(c) for c in rgb) + (1.0,)
     mat.diffuse_color = rgba
+    if FLAT_COLORS:
+        flat_shader(mat)
+        return mat
     bsdf = mat.node_tree.nodes.get('Principled BSDF')
     bsdf.inputs['Base Color'].default_value = rgba
     bsdf.inputs['Roughness'].default_value = roughness
@@ -754,7 +785,8 @@ g.prism([(W, PORCH_FRONT, 3.045), (W, FRONT, 3.045),
          (W, PORCH_FRONT, LOW_EAVE + (PORCH_FRONT - porch_eave_y) * PORCH_PITCH - 0.08)], (-0.10, 0, 0))
 g.finish('Entry right roof-side closure', M['stucco'])
 
-# Deliberately do not change selection, cameras, lighting, world, units or view.
+# Selection, cameras, lighting, world and units are unchanged.
+# Flat-color mode sets Standard/sRGB color management above.
 bpy.context.view_layer.update()
 print('Honor FH-1 exterior created: %d mesh objects in %s.' % (len(COL.objects), COLLECTION_NAME))
 print('Front is -Y. Unseen elevations and roof dimensions are approximations.')
