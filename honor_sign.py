@@ -1,4 +1,4 @@
-"""A little front-lawn sign for the future Honor home.
+"""Two matching front-lawn signs for the future Honor home.
 
 Run this file in Blender's Text Editor after the house and environment scripts.
 Creates a white, dark-trimmed two-post sign facing the street (-Y):
@@ -7,7 +7,9 @@ Creates a white, dark-trimmed two-post sign facing the street (-Y):
 
 Only this script's HONOR_SIGN collection is replaced on rerun. No existing
 house, pool, environment, camera, lighting or render settings are changed.
-Text stays editable and uses Blender's built-in font; no external assets.
+Text stays editable and uses Blender's built-in font. A second sign to the
+left displays PHOTO_PATH without cropping or stretching. Its image is packed
+into the blend file when this script runs; save the blend file to retain it.
 Coordinates are meters in the house's frame. Position/size controls are below.
 Source reviewed; not executed or rendered in Blender in the assistant session.
 """
@@ -30,8 +32,15 @@ SIGN_Y = None                   # None = 2 meters behind the road edge
 SIGN_Z = None                   # None = default environment lawn elevation
 ANGLE_DEGREES = 0.0             # rotation about house-frame Z
 ROAD_CLEARANCE = 2.0
+PHOTO_PATH = r'C:\Users\timh\Downloads\bpy\pic.jpeg'
+PHOTO_MAX_WIDTH = 1.90          # outer board dimensions, in meters
+PHOTO_MAX_HEIGHT = 1.40
+PHOTO_GAP = 0.35                # edge-to-edge gap, left as seen from the street
+PHOTO_BORDER = 0.045
 
 assert SIGN_WIDTH > 0.5 and SIGN_HEIGHT > 0.35 and PANEL_BOTTOM >= 0.0
+assert PHOTO_BORDER > 0.0 and PHOTO_GAP >= 0.0
+assert min(PHOTO_MAX_WIDTH, PHOTO_MAX_HEIGHT) > 2 * PHOTO_BORDER
 
 
 # --------------------------- read-only placement ----------------------------
@@ -90,6 +99,29 @@ SIGN_FRAME = (anchor @ Matrix.Translation((sx, sy, sz)) @
               Matrix.Rotation(math.radians(ANGLE_DEGREES), 4, 'Z'))
 
 
+# Validate the photo before replacing any existing sign geometry. Reuse only
+# this script's image, leaving any independently loaded copy untouched.
+photo = next((image for image in bpy.data.images
+              if image.get(OWNER) and image.get('photo_source') == PHOTO_PATH), None)
+if photo is None:
+    try:
+        photo = bpy.data.images.load(PHOTO_PATH, check_existing=False)
+    except RuntimeError as exc:
+        raise RuntimeError('Could not load photo sign image: ' + PHOTO_PATH) from exc
+    photo[OWNER] = True
+    photo['photo_source'] = PHOTO_PATH
+photo_width, photo_height = photo.size
+if photo_width <= 0 or photo_height <= 0:
+    raise RuntimeError('Photo sign image has no readable pixels: ' + PHOTO_PATH)
+photo.pack()
+photo_scale = min((PHOTO_MAX_WIDTH - 2 * PHOTO_BORDER) / photo_width,
+                  (PHOTO_MAX_HEIGHT - 2 * PHOTO_BORDER) / photo_height)
+pw = photo_width * photo_scale + 2 * PHOTO_BORDER
+ph = photo_height * photo_scale + 2 * PHOTO_BORDER
+PHOTO_FRAME = SIGN_FRAME @ Matrix.Translation(
+    (-(SIGN_WIDTH + pw) / 2 - PHOTO_GAP, 0, 0))
+
+
 # -------------------------- isolated rerun cleanup --------------------------
 def descendants(collection):
     result = [collection]
@@ -140,7 +172,7 @@ DARK = material('charcoal lettering and trim', (0.16, 0.19, 0.20))
 ACCENT = material('muted coastal blue lettering', (0.25, 0.43, 0.48))
 
 
-def box(name, lo, hi, mat, bevel=0.006):
+def box(name, lo, hi, mat, bevel=0.006, frame=None):
     a, b, c = lo
     d, e, f = hi
     vertices = [(a, b, c), (d, b, c), (d, e, c), (a, e, c),
@@ -155,7 +187,7 @@ def box(name, lo, hi, mat, bevel=0.006):
     obj = bpy.data.objects.new('Sign | ' + name, mesh)
     obj[OWNER] = True
     COL.objects.link(obj)
-    obj.matrix_world = SIGN_FRAME.copy()
+    obj.matrix_world = (SIGN_FRAME if frame is None else frame).copy()
     if bevel:
         modifier = obj.modifiers.new('soft painted edges', 'BEVEL')
         modifier.width = bevel
@@ -216,6 +248,57 @@ def lettering(name, body, center_z, max_width, max_height, mat):
 
 lettering('address', LINE_1, bottom + h * 0.69, w - 0.20, h * 0.23, DARK)
 lettering('future home message', LINE_2, bottom + h * 0.27, w - 0.28, h * 0.19, ACCENT)
+
+
+# ---------------------------- left-hand photo sign --------------------------
+photo_top = PANEL_BOTTOM + ph
+box('photo charcoal outer frame', (-pw / 2, -0.035, PANEL_BOTTOM),
+    (pw / 2, 0.035, photo_top), DARK, 0.012, frame=PHOTO_FRAME)
+box('photo white inset face', (-pw / 2 + 0.025, -0.047, PANEL_BOTTOM + 0.025),
+    (pw / 2 - 0.025, -0.030, photo_top - 0.025), WHITE, frame=PHOTO_FRAME)
+for side in (-1, 1):
+    x = side * max(0.0, pw / 2 - 0.18)
+    box('photo white support post %s' % side, (x - 0.045, 0.035, -0.20),
+        (x + 0.045, 0.125, photo_top + 0.08), WHITE, frame=PHOTO_FRAME)
+    box('photo post cap %s' % side, (x - 0.057, 0.023, photo_top + 0.075),
+        (x + 0.057, 0.137, photo_top + 0.11), DARK, frame=PHOTO_FRAME)
+
+PHOTO_MAT = material('printed photograph', (1.0, 1.0, 1.0))
+nodes, links = PHOTO_MAT.node_tree.nodes, PHOTO_MAT.node_tree.links
+texture = nodes.new('ShaderNodeTexImage')
+texture.image = photo
+texture.interpolation = 'Linear'
+coords = nodes.new('ShaderNodeTexCoord')
+links.new(coords.outputs['UV'], texture.inputs['Vector'])
+links.new(texture.outputs['Color'],
+          nodes.get('Principled BSDF').inputs['Base Color'])
+
+# Explicit UVs keep the image upright and unmirrored from the street (-Y).
+# This face sits just ahead of the white backing, avoiding coplanar flicker.
+left, right = -pw / 2 + PHOTO_BORDER, pw / 2 - PHOTO_BORDER
+low, high = PANEL_BOTTOM + PHOTO_BORDER, photo_top - PHOTO_BORDER
+mesh = bpy.data.meshes.new('Sign | photo print mesh')
+mesh[OWNER] = True
+mesh.from_pydata([(left, -0.049, low), (right, -0.049, low),
+                  (right, -0.049, high), (left, -0.049, high)], [], [(0, 1, 2, 3)])
+mesh.materials.append(PHOTO_MAT)
+mesh.update()
+uv = mesh.uv_layers.new(name='Photo UV')
+uv_corners = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+for loop in mesh.loops:
+    uv.data[loop.index].uv = uv_corners[loop.vertex_index]
+obj = bpy.data.objects.new('Sign | photo print', mesh)
+obj[OWNER] = True
+COL.objects.link(obj)
+obj.matrix_world = PHOTO_FRAME.copy()
+COL['photo_source'] = PHOTO_PATH
+
+# Remove obsolete owned textures only; never touch images used elsewhere.
+for image in list(bpy.data.images):
+    if image != photo and image.get(OWNER) and image.users == 0:
+        bpy.data.images.remove(image)
+
 bpy.context.view_layer.update()
-print('Honor front-lawn sign added: ' + LINE_1 + ' / ' + LINE_2)
-print('Existing models and scene settings were not changed. Rerun to replace only this sign.')
+print('Honor front-lawn signs added: ' + LINE_1 + ' / ' + LINE_2)
+print('Photo sign placed to the left: ' + PHOTO_PATH)
+print('Existing models and scene settings were not changed. Rerun to replace only these signs.')
