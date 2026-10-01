@@ -1,4 +1,6 @@
-## Prompt
-```
-Here are three photos of my drone: "C:\Users\timh\Downloads\drone.jpg", "C:\Users\timh\Downloads\drone_rear.jpeg", "C:\Users\timh\Downloads\drone_side.jpeg". Please write me a python script that I can use in blender to construct a 3d model of it (.bpy file). Save it to this directory as drone2.bpy please.
-```
+## Paint Codes
+- Body = Delicate White (R: 241 G: 242 B: 238 LRV: 88)
+- Trim = Delicate White (R: 241 G: 242 B: 238 LRV: 88)
+- Secondary Body = Delicate White (R: 241 G: 242 B: 238 LRV: 88)
+- Accent = SkyDiving = (R: 198 G: 214 B: 215 LRV: 65)
+- Accent = Witchcraft = (R: 71 G: 76 B: 80 LRV: 7)
