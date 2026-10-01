@@ -36,15 +36,8 @@ MOTOR_X = 102.0
 MOTOR_Y = 98.0
 PROP_RADIUS = 63.5
 CAMERA_TILT_DEGREES = -6.0
-ADD_STUDIO = True
-LOAD_REFERENCE_PHOTOS = False
 SAVE_BLEND = False
 BLEND_PATH = r"C:\Users\timh\Downloads\bpy\drone2.blend"
-REFERENCE_PHOTOS = (
-    r"C:\Users\timh\Downloads\drone.jpg",
-    r"C:\Users\timh\Downloads\drone_rear.jpeg",
-    r"C:\Users\timh\Downloads\drone_side.jpeg",
-)
 SCENE_NAME = "Drone2 - photo reconstruction"
 COLLECTION_NAME = "DRONE2 - generated model"
 MM = 0.001 * SIZE_MULTIPLIER
@@ -364,7 +357,6 @@ def make_materials():
         'amber': ('Yellow power connector housing', (.82,.40,.02), 0,.43),
         'glass': ('Blue black camera lens', (.012,.038,.060), .38,.10),
         'pupil': ('Camera lens central aperture', (.003,.004,.008), .05,.16),
-        'ground': ('Slate studio floor', (.045,.057,.073), .05,.62),
     }
     for key, (name,color,metal,rough) in specs.items():
         MAT[key], shader = material(name, color, metal, rough)
@@ -821,103 +813,23 @@ def make_rear_antenna():
         screw("Rear mast base screw",x,83,39)
 
 
-# ------------------------------ PRESENTATION -----------------------------
-def aim(obj,target):
-    direction = vmm(target)-obj.location
-    obj.rotation_euler = direction.to_track_quat('-Z','Y').to_euler()
-
-
-def make_studio():
-    group("08 | studio floor, lights and viewing cameras (not aircraft)")
-    floor = box("Studio floor",(0,0,-3),(1100,1100,3),MAT['ground'],.5)
-    floor.parent = None
-    def area(name,location,energy,size,target):
-        data = bpy.data.lights.new(name,'AREA')
-        data.energy = energy
-        data.shape = 'DISK'
-        data.size = size*MM
-        obj = bpy.data.objects.new(name,data)
-        register(obj,drone=False)
-        obj.location = vmm(location)
-        aim(obj,target)
-        return obj
-    area("Large soft key",(260,-340,490),55,290,(0,0,60))
-    area("Soft front fill",(-310,-160,260),26,250,(0,0,75))
-    area("Rear rim for dark propellers",(130,300,390),65,240,(0,0,70))
-    cameras = []
-    for name,location in (("Camera - front three quarter",(425,-565,335)),
-                          ("Camera - rear three quarter",(-430,550,350)),
-                          ("Camera - side inspection",(570,20,260))):
-        data = bpy.data.cameras.new(name)
-        data.lens = 48
-        data.clip_start = .005*SIZE_MULTIPLIER
-        data.clip_end = 25*SIZE_MULTIPLIER
-        obj = bpy.data.objects.new(name,data)
-        register(obj,drone=False)
-        obj.location = vmm(location)
-        aim(obj,(0,0,88))
-        cameras.append(obj)
-    SCENE.camera = cameras[0]
-
-
-def make_references():
-    group("09 | optional supplied reference photographs")
-    for index,path in enumerate(REFERENCE_PHOTOS):
-        if not os.path.isfile(path):
-            print("Reference image not found, skipped:",path)
-            continue
-        image = bpy.data.images.load(path,check_existing=True)
-        obj = bpy.data.objects.new("Reference | "+os.path.basename(path),None)
-        register(obj,drone=False)
-        obj.empty_display_type = 'IMAGE'
-        obj.data = image
-        obj.empty_display_size = 330*MM
-        obj.location = vmm((-450+index*450,400,150))
-        obj.rotation_euler.x = math.pi/2
-        obj.hide_render = True
-        obj.hide_set(True)
-    GROUP.hide_render = True
-
-
+# --------------------------- MODEL-ONLY FINISH ----------------------------
 def finish_scene():
+    # Remove the previous version's world only when no other scene uses it.
+    # The generated collection (including its old floor/lights/cameras) was
+    # already replaced by begin_scene(). No unrelated objects are deleted.
     world = bpy.data.worlds.get("D2 | neutral studio world")
-    if world is None:
-        world = bpy.data.worlds.new("D2 | neutral studio world")
-    world.use_nodes = True
-    background = world.node_tree.nodes.get('Background')
-    if background:
-        background.inputs['Color'].default_value = (.16,.19,.24,1)
-        background.inputs['Strength'].default_value = .35
-    SCENE.world = world
-    engines = {item.identifier for item in SCENE.render.bl_rna.properties['engine'].enum_items}
-    # Installed render engines may not all appear in the RNA enum until selected.
-    try:
-        SCENE.render.engine = 'CYCLES'
-        SCENE.cycles.samples = 96
-        SCENE.cycles.use_denoising = True
-    except (TypeError,AttributeError):
-        for engine in ('BLENDER_EEVEE_NEXT','BLENDER_EEVEE','BLENDER_WORKBENCH'):
-            try:
-                SCENE.render.engine = engine
-                break
-            except TypeError:
-                continue
-    SCENE.render.resolution_x = 1400
-    SCENE.render.resolution_y = 1100
-    SCENE.render.resolution_percentage = 100
-    SCENE.render.image_settings.file_format = 'PNG'
-    SCENE.render.film_transparent = False
-    SCENE.render.filepath = os.path.join(os.path.dirname(BLEND_PATH),'drone2_preview.png')
-    try:
-        SCENE.view_settings.view_transform = 'AgX'
-    except TypeError:
-        SCENE.view_settings.view_transform = 'Filmic'
-    SCENE.view_settings.exposure = 0
-    SCENE.view_settings.gamma = 1
+    if world is not None:
+        if SCENE.world == world:
+            SCENE.world = None
+        if world.users == 0:
+            bpy.data.worlds.remove(world)
+
     SCENE["notes"] = "Photographic approximation; no dimensions were supplied. Front = -Y."
-    SCENE["usage"] = "Rotate named rotor pivots or camera tilt pivot. Select root to move aircraft."
+    SCENE["usage"] = "Model only. Materials retained. Rotate rotor/camera pivots; move aircraft root."
     active(ROOT)
-    # A comfortable material viewport, independent of the original scene's views.
+    # Show colors using built-in material-preview illumination. This does NOT
+    # add lights, camera objects, a floor, or an environment object to the model.
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type == 'VIEW_3D':
@@ -925,7 +837,14 @@ def finish_scene():
                 space.clip_start = .001*SIZE_MULTIPLIER
                 space.clip_end = 100*SIZE_MULTIPLIER
                 space.shading.type = 'MATERIAL'
+                space.shading.use_scene_world = False
+                space.shading.use_scene_lights = False
+                # Keep editable pivots, but hide helper axes and the dotted
+                # parent-child relationship guides. Actual drone wires stay.
+                space.overlay.show_extras = False
+                space.overlay.show_relationship_lines = False
                 region = space.region_3d
+                region.view_perspective = 'PERSP'
                 region.view_location = vmm((0,0,87))
                 region.view_distance = .62*SIZE_MULTIPLIER
                 region.view_rotation = Vector((425,-565,280)).to_track_quat('Z','Y')
@@ -935,7 +854,8 @@ def finish_scene():
         else:
             os.makedirs(os.path.dirname(BLEND_PATH),exist_ok=True)
             bpy.ops.wm.save_as_mainfile(filepath=BLEND_PATH)
-    print("DRONE2 complete: %d editable objects." % len(TOP.all_objects))
+    print("DRONE2 complete: colored aircraft only, %d editable objects." % len(TOP.all_objects))
+    print("No floor, lights, viewing cameras, or reference planes were created.")
     print("Front is -Y. Dimensions are estimates; this is not a flight/engineering model.")
     print("Use File > Save As to save the generated Blender project as drone2.blend.")
 
@@ -960,10 +880,6 @@ def main():
             make_arm_wiring(sx,sy)
     make_camera()
     make_rear_antenna()
-    if ADD_STUDIO:
-        make_studio()
-    if LOAD_REFERENCE_PHOTOS:
-        make_references()
     finish_scene()
 
 
