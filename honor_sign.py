@@ -7,9 +7,9 @@ Creates a white, dark-trimmed two-post sign facing the street (-Y):
 
 Only this script's HONOR_SIGN collection is replaced on rerun. No existing
 house, pool, environment, camera or lighting data are changed.
-FLAT_COLORS defaults to True: unlit swatches and an unlit photograph.
+Lit materials are the default, including the printed photograph.
 Sets scene-wide Standard/sRGB color management; no companion script required.
-Matches swatches, not Solid studio-light shading. Set False for lit materials.
+Appearance varies with lighting. All generated materials use lit Principled shaders.
 Text stays editable and uses Blender's built-in font. A second sign to the
 left displays PHOTO_PATH without cropping or stretching. Its image is packed
 into the blend file when this script runs; save the blend file to retain it.
@@ -154,10 +154,10 @@ COL['placement'] = 'Front lawn, street-facing; visual placement only'
 bpy.context.scene.collection.children.link(COL)
 
 
-# Built-in Solid-swatch appearance; the photograph remains an unlit texture.
-FLAT_COLORS = True
+# Always use lit Principled materials for boards, lettering and photograph.
+CONFIGURE_COLOR_MANAGEMENT = True
 
-if FLAT_COLORS:
+if CONFIGURE_COLOR_MANAGEMENT:
     scene = bpy.context.scene
     scene.display_settings.display_device = 'sRGB'
     scene.view_settings.view_transform = 'Standard'
@@ -167,16 +167,6 @@ if FLAT_COLORS:
     scene.view_settings.use_curve_mapping = False
     if hasattr(scene.view_settings, 'use_white_balance'):
         scene.view_settings.use_white_balance = False
-
-
-def flat_shader(mat):
-    nodes, links = mat.node_tree.nodes, mat.node_tree.links
-    shader = nodes.new('ShaderNodeEmission')
-    shader.name = 'Honor | flat swatch'
-    shader.inputs['Color'].default_value = tuple(mat.diffuse_color)
-    shader.inputs['Strength'].default_value = 1.0
-    links.new(shader.outputs[0], nodes.get('Material Output').inputs['Surface'])
-    return shader
 
 
 def linear(v):
@@ -189,9 +179,6 @@ def material(name, rgb):
     mat.use_nodes = True
     color = tuple(linear(v) for v in rgb) + (1.0,)
     mat.diffuse_color = color
-    if FLAT_COLORS:
-        flat_shader(mat)
-        return mat
     shader = mat.node_tree.nodes.get('Principled BSDF')
     shader.inputs['Base Color'].default_value = color
     shader.inputs['Roughness'].default_value = 0.57
@@ -301,9 +288,8 @@ texture.image = photo
 texture.interpolation = 'Linear'
 coords = nodes.new('ShaderNodeTexCoord')
 links.new(coords.outputs['UV'], texture.inputs['Vector'])
-photo_shader = nodes.get('Honor | flat swatch') if FLAT_COLORS else nodes.get('Principled BSDF')
-links.new(texture.outputs['Color'],
-          photo_shader.inputs['Color' if FLAT_COLORS else 'Base Color'])
+photo_shader = nodes.get('Principled BSDF')
+links.new(texture.outputs['Color'], photo_shader.inputs['Base Color'])
 
 # Explicit UVs keep the image upright and unmirrored from the street (-Y).
 # This face sits just ahead of the white backing, avoiding coplanar flicker.
@@ -334,4 +320,4 @@ bpy.context.view_layer.update()
 print('Honor front-lawn signs added: ' + LINE_1 + ' / ' + LINE_2)
 print('Photo sign placed to the left: ' + PHOTO_PATH)
 print('Existing models untouched. Rerun to replace only these signs.')
-print('Built-in flat colors: %s; Standard/sRGB applied when enabled.' % FLAT_COLORS)
+print('All materials are lit; photograph retained.')
