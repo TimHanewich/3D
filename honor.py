@@ -1323,6 +1323,30 @@ def build_first_floor():
         treads.box((STAIR_X0, front, top - 0.025),
                    (STAIR_X1, rear + 0.015, top))
     stairs.finish('Interior | stair flight risers and sloping underside', M['int_trim'])
+    # Continue the cafe-facing enclosure from its old endpoint to the foot.
+    # Follow the actual first-step underside (which meets the finished floor),
+    # rather than a full-width block that would obstruct the stair entrance.
+    side_start = GARAGE_REAR_Y
+    first_step_front = STAIR_Y1 - going
+    assert POWDER_REAR_Y < side_start < first_step_front
+    side_x = STAIR_X0 - half
+    lower_side = Geometry()
+    lower_side.prism([(side_x, side_start, z),
+                      (side_x, STAIR_Y1, z),
+                      (side_x, first_step_front, stair_underside_z(first_step_front)),
+                      (side_x, side_start, stair_underside_z(side_start))],
+                     (INTERIOR_WALL_T, 0, 0))
+    lower_side.finish('Interior | lower stair side enclosure to first riser', M['int_wall'])
+    # Carry the room-side baseboard around the tapered bottom of the panel.
+    trim_transition = STAIR_Y1 - (STAIR_SOFFIT_THICKNESS + 0.10) * going / rise
+    trim_ys = sorted(set([side_start, first_step_front, STAIR_Y1] +
+                         [y for y in (trim_transition,) if side_start < y < first_step_front]))
+    base_profile = [(side_x - 0.012, side_start, z), (side_x - 0.012, STAIR_Y1, z)]
+    for y in reversed(trim_ys[:-1]):
+        base_profile.append((side_x - 0.012, y, min(z + 0.10, stair_underside_z(y))))
+    lower_base = Geometry()
+    lower_base.prism(base_profile, (0.012, 0, 0))
+    lower_base.finish('Interior | lower stair side baseboard', M['int_trim'])
     stair_obj = treads.finish('Interior | stair treads to upper loft', M['int_wood'])
     stair_obj['walkable'] = True
     stair_obj['riser_count'] = risers
