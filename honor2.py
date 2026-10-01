@@ -1,3 +1,5 @@
+# Made by gpt-6.1-sol on low reasoning
+
 """Honor / FH-1 brochure reconstruction. Run in Blender's Text Editor.
 Units in the design below are feet; generated mesh coordinates are meters.
 Front is -Y. Floor-plan drawing is labeled C-1: FH-1 facade is substituted.
