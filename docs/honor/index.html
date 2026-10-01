@@ -20,6 +20,8 @@
     h1 { margin: 10px 0; font-size: 34px; letter-spacing: -.04em; }
     p { line-height: 1.6; color: #c1d9d4; font-size: 14px; }
     #status { overflow-wrap: anywhere; }
+    .card { max-height: calc(100dvh - 40px); overflow-y: auto; }
+    #error-details { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border: 1px solid #f1a5a555; border-radius: 8px; background: #0004; color: #ffd1d1; font: 12px/1.5 ui-monospace, monospace; user-select: text; }
     .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; font-size: 13px; color: #d6e7e2; }
     kbd { display: inline-block; background: #ffffff12; padding: 4px 7px; border: 1px solid #ffffff25; border-radius: 5px; font: inherit; }
     button { border: 0; border-radius: 10px; background: #a6dfca; color: #102d29; padding: 13px 20px; font: 600 15px system-ui; cursor: pointer; }
@@ -49,6 +51,7 @@
       <div class="eyebrow">6278 Dry Tortugas</div>
       <h1 id="title">Our future home.</h1>
       <p id="status" role="status" aria-live="polite">Loading the neighborhood…</p>
+      <pre id="error-details" role="alert" hidden></pre>
       <div class="keys">
         <span><kbd>W A S D</kbd> Move</span><span><kbd>Mouse</kbd> Look around</span>
         <span><kbd>Shift</kbd> Move faster</span><span><kbd>Esc</kbd> Pause</span>
@@ -65,16 +68,37 @@
     const overlay = document.querySelector('#overlay');
     const modeLabel = document.querySelector('#mode');
     const crosshair = document.querySelector('#crosshair');
+    const errorDetails = document.querySelector('#error-details');
+    const modelUrl = 'https://github.com/TimHanewich/3D/releases/download/6077254e/scene.glb';
     let phase = 'loading';
+    let loadStage = 'Checking the page setup';
 
-    // Catch both module-download failures and initialization/loading failures.
+    // Keep the actual error visible, including HTTP details when the browser exposes them.
     function showError(error) {
-      console.error(error);
+      console.error('Explorer failed during: ' + loadStage, error);
+      const details = ['Stage: ' + loadStage, 'Model URL: ' + modelUrl];
+      const seen = new Set();
+      let current = error;
+      while (current != null && !seen.has(current)) {
+        seen.add(current);
+        details.push((seen.size > 1 ? 'Caused by: ' : 'Error: ') + (current.message || String(current)));
+        const response = current.response || current.target;
+        if (response && typeof response.status === 'number') {
+          details.push('HTTP status: ' + response.status + (response.statusText ? ' ' + response.statusText : ''));
+          if (response.url || response.responseURL) details.push('Response URL: ' + (response.url || response.responseURL));
+        }
+        if (current.stack) details.push('Stack trace:\n' + current.stack);
+        current = current.cause;
+      }
+      if (error == null) details.push('No error details were provided by the browser.');
+      details.push('If the browser only reports a network error (such as "Failed to fetch"), an HTTP status or server message may not be available to this page. Check the browser Console and Network tabs for additional details, including possible CORS blocking.');
       phase = 'error';
       overlay.hidden = false;
       crosshair.hidden = true;
       modeLabel.textContent = 'Unable to load';
-      status.textContent = 'Could not load the explorer. Serve this folder over HTTP, check your internet connection, and confirm the GitHub release download is accessible. Details: ' + (error.message || String(error));
+      status.textContent = 'Could not load the explorer. Error details are below; you can select and copy them.';
+      errorDetails.textContent = details.join('\n\n');
+      errorDetails.hidden = false;
       start.textContent = 'Reload';
       start.disabled = false;
     }
@@ -84,6 +108,8 @@
       if (location.protocol === 'file:') {
         throw new Error('Do not open index.html by double-clicking. Run: python -m http.server 8000 --directory "C:\\Users\\timh\\Downloads\\bpy\\docs" and open http://localhost:8000');
       }
+      loadStage = 'Downloading Three.js and its addons';
+      status.textContent = loadStage + '…';
       const [THREE, { GLTFLoader }, { PointerLockControls }, { RoomEnvironment }, { DRACOLoader }, { KTX2Loader }, { MeshoptDecoder }] = await Promise.all([
         import('three'),
         import('three/addons/loaders/GLTFLoader.js'),
@@ -94,6 +120,7 @@
         import('three/addons/libs/meshopt_decoder.module.js')
       ]);
 
+      loadStage = 'Initializing the 3D renderer';
       const scene = new THREE.Scene();
       scene.background = new THREE.Color('#bcdce8');
       const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.08, 2000);
@@ -199,8 +226,10 @@
       const ktx2 = new KTX2Loader().setTranscoderPath(base + 'basis/').detectSupport(renderer);
       const loader = new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
       let gltf;
+      loadStage = 'Downloading or decoding the model from GitHub';
+      status.textContent = 'Downloading the model from GitHub…';
       try {
-        gltf = await loader.loadAsync('https://github.com/TimHanewich/3D/releases/download/6077254e/scene.glb', event => {
+        gltf = await loader.loadAsync(modelUrl, event => {
           if (event.lengthComputable && event.total > 0) {
             status.textContent = 'Loading scene… ' + Math.round(event.loaded / event.total * 100) + '%';
           } else {
@@ -211,6 +240,7 @@
         draco.dispose();
         ktx2.dispose();
       }
+      loadStage = 'Preparing the downloaded scene';
       const model = gltf.scene;
       scene.add(model);
       model.updateMatrixWorld(true);
