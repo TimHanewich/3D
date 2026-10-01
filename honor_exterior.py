@@ -13,8 +13,12 @@ REFERENCE / LIMITATIONS
   upper floor, 16'4\" x 8' rear lanai, rear openings and upper side openings.
   Ceiling references: ground 9'4\", upper 8'8\". Exterior widths include walls.
   Heights of openings, roof pitches and trim estimated from rendering.
-  Colors updated from supplied coloring.jpeg: white body/trim, charcoal accents
-  and roof, pale blue-gray entry door. Photo-based approximations, not paint codes.
+  Paint colors use the exact RGB values supplied in paint_codes.md:
+  Delicate White: body, secondary body/gable and all painted white trim.
+  SkyDiving: front entry door. Witchcraft: garage door, shutters and brackets.
+  Shutter/bracket paint placement inferred from coloring.jpeg; doors per user.
+  Roof, glazing, factory window frames and hardware remain photo approximations.
+  LRV values stored as metadata; appearance still depends on lighting/display.
   Only colors/material assignments changed; the original geometry is retained.
   Side/rear finishes and lanai roof are inferred, not documented elevations.
   Optional lanai extension and optional ground stair window are NOT included.
@@ -114,22 +118,43 @@ def material(name, rgb, roughness=0.65, noise=0.0, metallic=0.0):
     return mat
 
 
-# Color-only update from the supplied coloring.jpeg (the central white home).
-# Approximate paint/base colors, not sampled shadow or sky-reflection colors.
-# Photo lighting and Blender lighting affect appearance; no paint codes supplied.
-# Keep the original geometry, roof profile and garage-left orientation.
-# Legacy 'blue' and 'wood' keys now mean charcoal shutters and black accents.
+# Paint RGB values transcribed from paint_codes.md; no external file needed.
+# Treat the supplied 8-bit RGB values as sRGB. material() converts them to linear
+# exactly once. LRV is retained as reference metadata, NOT a brightness multiplier.
+# SkyDiving on entry / Witchcraft on garage follow the user's recollection.
+# Witchcraft on shutters and gable brackets is inferred from coloring.jpeg.
+# Roofing, glazing, factory window frames and hardware retain photo-based colors.
+# Keep all geometry, roof profiles and garage-left orientation unchanged.
+PAINT_CODES = {
+    'Delicate White': {'rgb': (241, 242, 238), 'lrv': 88},
+    'SkyDiving': {'rgb': (198, 214, 215), 'lrv': 65},
+    'Witchcraft': {'rgb': (71, 76, 80), 'lrv': 7},
+}
+
+
+def paint(name, color, roughness=0.65, noise=0.0):
+    spec = PAINT_CODES[color]
+    rgb = tuple(channel / 255.0 for channel in spec['rgb'])
+    mat = material(color + ' | ' + name, rgb, roughness, noise)
+    mat['paint_name'] = color
+    mat['paint_srgb_8bit'] = list(spec['rgb'])
+    mat['paint_lrv_reference'] = spec['lrv']
+    mat['paint_source'] = 'User-supplied paint_codes.md'
+    return mat
+
+
 M = {
-    'siding': material('soft white lap siding', (0.91, 0.915, 0.915), noise=0.001),
-    'stucco': material('soft white stucco', (0.89, 0.895, 0.885), noise=0.007),
-    'gable': material('white gable boards', (0.91, 0.915, 0.915), noise=0.001),
-    'trim': material('clean white painted trim', (0.95, 0.95, 0.94), 0.52),
-    'blue': material('charcoal slate shutters', (0.235, 0.26, 0.29), 0.53),
-    'blue_edge': material('charcoal shutter battens', (0.225, 0.25, 0.28), 0.53),
-    'door': material('pale blue gray front door', (0.65, 0.725, 0.755), 0.53),
-    'wood': material('near black window frames and gable brackets', (0.14, 0.155, 0.17), 0.54),
-    'garage': material('charcoal slate garage door', (0.235, 0.26, 0.29), 0.57),
-    'panel': material('charcoal slate garage raised panels', (0.245, 0.27, 0.30), 0.54),
+    'siding': paint('lap siding', 'Delicate White', noise=0.001),
+    'stucco': paint('stucco body', 'Delicate White', noise=0.007),
+    'gable': paint('secondary body and gable boards', 'Delicate White', noise=0.001),
+    'trim': paint('trim, fascia, columns and casing', 'Delicate White', 0.52),
+    'blue': paint('shutters', 'Witchcraft', 0.53),
+    'blue_edge': paint('shutter battens and braces', 'Witchcraft', 0.53),
+    'door': paint('front entry door', 'SkyDiving', 0.53),
+    'brackets': paint('gable brackets', 'Witchcraft', 0.54),
+    'wood': material('near black factory window frames', (0.14, 0.155, 0.17), 0.54),
+    'garage': paint('garage door', 'Witchcraft', 0.57),
+    'panel': paint('garage raised panels', 'Witchcraft', 0.54),
     'recess': material('neutral dark panel and sash recesses', (0.12, 0.135, 0.15), 0.76),
     'glass': material('opaque dark reflective exterior glazing', (0.115, 0.17, 0.18), 0.16, metallic=0.35),
     'concrete': material('foundation and porch slab', (0.61, 0.60, 0.55), noise=0.003),
@@ -384,8 +409,8 @@ def shutter(f, op, side):
 
 
 def raised_panel(f, name, a, b, low, high, mat, depth=0.0):
-    # Beveled raised panel surrounded by a real inset shadow groove.
-    f.part(name + ' inset', a, b, depth, depth + 0.008, low, high, M['recess'])
+    # Painted panel and groove share the specified paint; geometry supplies shade.
+    f.part(name + ' inset', a, b, depth, depth + 0.008, low, high, mat)
     inset = 0.028
     ring0 = [f.p(a + 0.011, depth + 0.01, low + 0.011), f.p(b - 0.011, depth + 0.01, low + 0.011),
              f.p(b - 0.011, depth + 0.01, high - 0.011), f.p(a + 0.011, depth + 0.01, high - 0.011)]
@@ -650,13 +675,13 @@ beam('Entry right rake', (W + OVERHANG, porch_eave_y, LOW_EAVE - 0.045),
 box('Garage left soffit', (gxl, 0, GARAGE_EAVE), (0.02, FRONT, GARAGE_EAVE + 0.07), M['trim'])
 box('Garage right soffit', (GARAGE_W - 0.01, 0, GARAGE_EAVE),
     (gxr, porch_eave_y, GARAGE_EAVE + 0.07), M['trim'])
-# Three short brown decorative brackets, not the white C-1 eave corbels.
+# Three Witchcraft decorative brackets; placement inferred from the color photo.
 for i, x in enumerate((1.12, gcx, GARAGE_W - 1.12)):
     ztop = gable_peak_z - abs(x - gcx) * GARAGE_PITCH - 0.035
-    box('Gable brown bracket %d' % (i + 1), (x - 0.055, -0.22, ztop - 0.36),
-        (x + 0.055, -0.10, ztop), M['wood'], 0.006)
+    box('Gable Witchcraft bracket %d' % (i + 1), (x - 0.055, -0.22, ztop - 0.36),
+        (x + 0.055, -0.10, ztop), M['brackets'], 0.006)
     beam('Gable bracket knee %d' % (i + 1), (x, -0.075, ztop - 0.34),
-         (x, -0.285, ztop - 0.07), 0.075, 0.075, M['wood'])
+         (x, -0.285, ztop - 0.07), 0.075, 0.075, M['brackets'])
 
 
 # ------------------------------ upper hipped roof ----------------------------
