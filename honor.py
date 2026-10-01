@@ -44,8 +44,12 @@ REFERENCE / LIMITATIONS
   wall and full-width reach-in closet. The powder room occupies the space below
   the high front treads, with clipped partitions and a sloping ceiling. Room
   sizes remain approximate; brochure dimensions are reference metadata only.
-  Shared floor plate and finishes have one aligned, genuinely open stairwell;
-  loft-edge guards leave the front stair arrival open. No new roof or footprint.
+  Shared floor plate and finishes have one aligned, genuinely open stairwell.
+  User stair revision: carpeted treads, risers, nosings and upper landing; solid
+  drywall half-walls replace the flight and loft-edge balusters/wood rails.
+  Carpet color and half-wall height are placeholders adjustable below. The
+  lower side closure and powder clearance are retained; both arrivals stay open.
+  Other room flooring is unchanged. No new roof or footprint.
   Optional master bath and tray ceiling are omitted. Refrigerator and laundry
   appliances are optional and disabled; utility connections/HVAC are inferred.
   SECOND_FLOOR_CUTAWAY omits main roof/soffits and upper ceiling for inspection;
@@ -128,6 +132,11 @@ STAIR_X0, STAIR_X1 = 8.82, W - 0.205
 STAIR_Y0, STAIR_Y1 = 7.55, 12.07  # upper/front arrival to lower/rear foot, traced from plan
 STAIR_RISERS = 18               # Inferred vertical fit; not a construction specification
 STAIR_SOFFIT_THICKNESS = 0.12
+# User revision: carpeted stairs and solid drywall instead of open balusters.
+# Color and half-wall height are visual placeholders, not confirmed selections.
+STAIR_CARPET_RGB = (0.69, 0.67, 0.63)
+STAIR_DRYWALL_HEIGHT = 1.02
+assert STAIR_DRYWALL_HEIGHT > 0
 assert isinstance(STAIR_RISERS, int) and STAIR_RISERS > 1
 assert STAIR_SOFFIT_THICKNESS > 0.025
 POWDER_REAR_Y = 8.68             # Powder room extends beneath the high end of the flight
@@ -235,6 +244,9 @@ for area_name, sqft in (('first_floor', 1017), ('second_floor', 1126),
     COL['brochure_' + area_name + '_area_sqft'] = sqft
 COL['brochure_area_note'] = 'Source labels only; not calculated mesh areas'
 COL['stair_rear_clearance_m'] = STAIR_REAR_CLEARANCE
+COL['stair_finish'] = 'User requested carpet on treads, risers and upper landing; color inferred'
+COL['stair_separator'] = 'User requested solid drywall instead of open balusters'
+COL['stair_drywall_height_m'] = STAIR_DRYWALL_HEIGHT
 
 
 # Always use lit Principled materials to reveal siding and shingle geometry.
@@ -337,7 +349,9 @@ if BUILD_FIRST_FLOOR or BUILD_SECOND_FLOOR:
         'int_ceiling': material('Interior | matte white ceiling', (0.93, 0.93, 0.90), 0.92),
         'int_tile': material('Interior | warm light tile - inferred', (0.76, 0.74, 0.68), 0.55),
         'int_grout': material('Interior | fine warm grout', (0.57, 0.55, 0.50), 0.88),
-        'int_wood': material('Interior | pale oak floors and stairs - inferred', (0.64, 0.51, 0.36), 0.65),
+        'int_wood': material('Interior | pale oak floors and cabinetry - inferred', (0.64, 0.51, 0.36), 0.65),
+        'int_carpet': material('Interior | stair carpet - neutral color placeholder',
+                               STAIR_CARPET_RGB, 0.98, noise=0.002),
         'int_counter': material('Interior | pale stone worktop - inferred', (0.88, 0.875, 0.84), 0.34),
         'int_ceramic': material('Interior | white sanitary ceramic', (0.94, 0.95, 0.93), 0.22),
         'int_steel': material('Interior | brushed appliance steel', (0.60, 0.62, 0.64), 0.30, metallic=0.8),
@@ -1213,6 +1227,16 @@ def interior_basin(name, rect, top, depth, mat):
                   ((a + c) / 2, (b + d) / 2, top - depth + 0.003), 0.025, M['int_steel'])
 
 
+def build_stair_landing():
+    """Carpeted arrival, flush with the existing upper finished-floor level."""
+    x0, y0, x1, y1 = STAIR_LANDING
+    landing = box('Interior | carpeted stair upper landing',
+                  (x0, y0, UPPER_FLOOR), (x1, y1, SECOND_FLOOR_Z), M['int_carpet'])
+    landing['walkable'] = True
+    landing['finish'] = 'Carpet; user requested; neutral color placeholder'
+    return landing
+
+
 def build_first_floor():
     z, ceiling = INTERIOR_FLOOR_Z, INTERIOR_CEILING_Z
     inset, half = 0.205, INTERIOR_WALL_T / 2
@@ -1320,9 +1344,16 @@ def build_first_floor():
                       (x0, rear, stair_underside_z(rear)),
                       (x0, rear, top - 0.025),
                       (x0, front, top - 0.025)], (STAIR_X1 - x0, 0, 0))
+        # Carpet replaces the old tread finish at the same walking elevation;
+        # the vertical strip wraps each riser up to the carpeted nosing.
         treads.box((STAIR_X0, front, top - 0.025),
                    (STAIR_X1, rear + 0.015, top))
-    stairs.finish('Interior | stair flight risers and sloping underside', M['int_trim'])
+        treads.box((STAIR_X0, rear, top - rise),
+                   (STAIR_X1, rear + 0.012, top - 0.025))
+    # The last riser is the edge of the upper floor plate, not another tread.
+    treads.box((STAIR_X0, STAIR_Y0, landing_z - rise),
+               (STAIR_X1, STAIR_Y0 + 0.012, landing_z))
+    stairs.finish('Interior | stair flight structure and sloping underside', M['int_trim'])
     # Continue the cafe-facing enclosure from its old endpoint to the foot.
     # Follow the actual first-step underside (which meets the finished floor),
     # rather than a full-width block that would obstruct the stair entrance.
@@ -1347,33 +1378,34 @@ def build_first_floor():
     lower_base = Geometry()
     lower_base.prism(base_profile, (0.012, 0, 0))
     lower_base.finish('Interior | lower stair side baseboard', M['int_trim'])
-    stair_obj = treads.finish('Interior | stair treads to upper loft', M['int_wood'])
+    stair_obj = treads.finish('Interior | carpeted stair treads nosings and risers',
+                              M['int_carpet'], 0.002)
     stair_obj['walkable'] = True
     stair_obj['riser_count'] = risers
     stair_obj['riser_m'] = rise
     stair_obj['going_m'] = going
+    stair_obj['finish'] = 'Carpet; user requested; neutral color placeholder'
     stair_obj['inferred_direction'] = 'Ascends toward -Y before house mirroring'
-    landing = box('Interior | stair upper landing floor',
-                  (STAIR_X0, STAIR_Y0 - 0.90, UPPER_FLOOR + 0.001),
-                  (STAIR_X1, STAIR_Y0, landing_z), M['int_wood'])
-    landing['walkable'] = True
-    # Flight handrail, balusters and landing guard use real opaque geometry.
-    rail_x = STAIR_X0 + 0.055
-    rail_start = (rail_x, STAIR_Y1 - going / 2, z + rise + 0.92)
-    rail_end = (rail_x, STAIR_Y0 + going / 2, landing_z - rise + 0.92)
-    beam('Interior | stair sloping handrail', rail_start, rail_end, 0.055, 0.055, M['int_wood'])
-    for i in range(risers - 1):
-        y = STAIR_Y1 - (i + 0.5) * going
-        bottom = z + (i + 1) * rise
-        interior_tube('stair baluster %02d' % i, (rail_x, y, bottom),
-                      (rail_x, y, bottom + 0.92), 0.012, M['metal'], 8)
+    build_stair_landing()
+
+    # Solid drywall replaces the entire sloping rail/baluster assembly. The
+    # lower edge meets the retained enclosure and powder wall, never filling
+    # the room below the flight. End faces close the panel at both stair ends.
+    ceiling_transition = STAIR_Y1 - (ceiling + STAIR_SOFFIT_THICKNESS - z) * going / rise
+    side_ys = sorted(set([STAIR_Y0, first_step_front, STAIR_Y1] +
+                         [y for y in (ceiling_transition,)
+                          if STAIR_Y0 < y < first_step_front]))
+    profile = [(side_x, y, under_stair_ceiling(y)) for y in side_ys]
+    profile.extend([(side_x, STAIR_Y1, z + rise + STAIR_DRYWALL_HEIGHT),
+                    (side_x, STAIR_Y0, landing_z + STAIR_DRYWALL_HEIGHT)])
+    separator = Geometry()
+    separator.prism(profile, (INTERIOR_WALL_T, 0, 0))
+    separator_obj = separator.finish('Interior | solid drywall stair half-wall', M['int_wall'])
+    separator_obj['finish'] = 'Drywall separator; user requested; height inferred'
     if not BUILD_SECOND_FLOOR:
-        # The upper-floor builder supplies complete guards and an open arrival.
-        for y in (STAIR_Y0 - 0.86, STAIR_Y0):
-            box('Interior | landing guard post', (rail_x - 0.025, y - 0.025, landing_z),
-                (rail_x + 0.025, y + 0.025, landing_z + 0.95), M['int_trim'])
-        beam('Interior | upper landing guard rail', (rail_x, STAIR_Y0 - 0.86, landing_z + 0.95),
-             (rail_x, STAIR_Y0, landing_z + 0.95), 0.055, 0.055, M['int_wood'])
+        # Still close the loft edge in first-floor-only inspection mode.
+        hx0, hy0, hx1, hy1 = STAIR_HOLE
+        upper_guard('loft stair edge', (hx0 - half, hy0), (hx0 - half, hy1))
 
     if BUILD_FIRST_FLOOR_FIXTURES:
         build_first_floor_fixtures()
@@ -1581,24 +1613,19 @@ def rectangles_overlap(a, b):
             min(a[3], b[3]) - max(a[1], b[1]) > 1e-6)
 
 
-def upper_guard(name, a, b, start_post=True):
-    """Level guard on the loft side of the opening; stair arrival stays open."""
-    z, height = SECOND_FLOOR_Z, 1.02
-    a, b = Vector((a[0], a[1], z)), Vector((b[0], b[1], z))
+def upper_guard(name, a, b):
+    """Solid drywall half-wall on the loft edge; no posts, spindles or wood rail."""
+    # Start at the structural plate so there is no gap beneath the wall finish.
+    a, b = Vector((a[0], a[1], UPPER_FLOOR)), Vector((b[0], b[1], UPPER_FLOOR))
     delta = b - a
-    count = max(1, math.ceil(delta.length / 0.11))
+    assert delta.length > 1e-6
+    normal = Vector((-delta.y, delta.x, 0)).normalized() * INTERIOR_WALL_T / 2
     g = Geometry()
-    for p in ((a, b) if start_post else (b,)):
-        g.box(p - Vector((0.03, 0.03, 0)), p + Vector((0.03, 0.03, height)))
-    for k in range(1, count):
-        p = a + delta * k / count
-        g.box(p + Vector((-0.009, -0.009, 0.08)),
-              p + Vector((0.009, 0.009, height - 0.03)))
-    g.finish('Interior | Upper | ' + name + ' posts and balusters', M['int_trim'])
-    for level, width in ((0.08, 0.035), (height, 0.055)):
-        beam('Interior | Upper | ' + name + ' rail',
-             a + Vector((0, 0, level)), b + Vector((0, 0, level)),
-             width, 0.055, M['int_wood'])
+    g.prism([a - normal, b - normal, b + normal, a + normal],
+            (0, 0, SECOND_FLOOR_Z + STAIR_DRYWALL_HEIGHT - UPPER_FLOOR))
+    obj = g.finish('Interior | Upper | ' + name + ' solid drywall half-wall', M['int_wall'])
+    obj['finish'] = 'Drywall separator; user requested; height inferred'
+    return obj
 
 
 def upper_basin(name, f, rect, top, depth, mat):
@@ -1870,19 +1897,20 @@ def build_second_floor():
             obj['room'] = name
             obj['brochure_room_size_reference'] = brochure_size
             obj['dimension_note'] = 'Fitted to existing shell; source label is not an as-built measurement'
-    exclusions = tuple(covered) + (STAIR_HOLE,)
-    if BUILD_FIRST_FLOOR:
-        exclusions += (STAIR_LANDING,)  # Existing landing already finishes at z.
+    exclusions = tuple(covered) + (STAIR_HOLE, STAIR_LANDING)
+    if not BUILD_FIRST_FLOOR:
+        build_stair_landing()  # Carpet stays consistent in upper-floor-only mode.
     loft = interior_floor('Upper | loft and connecting hall',
                           (inset, front, W - inset, rear), True, exclusions,
                           slab_z=UPPER_FLOOR, floor_z=z)
     loft['room'] = 'Loft and hall'
     loft['brochure_room_size_reference'] = 'Loft: 11 ft 0 in x 16 ft 0 in'
 
-    # Full-height guards replace the old short placeholder landing rail.
-    # No rail crosses the front arrival or blocks access from the loft.
+    # Solid drywall replaces the loft balusters. Keep its full thickness on
+    # the floor-plate side of the hole, with no wall across the front arrival.
     hx0, hy0, hx1, hy1 = STAIR_HOLE
-    upper_guard('loft stair edge', (hx0 - 0.031, hy0), (hx0 - 0.031, hy1))
+    guard_x = hx0 - INTERIOR_WALL_T / 2
+    upper_guard('loft stair edge', (guard_x, hy0), (guard_x, hy1))
     # The straight master/closet wall closes the rear of this opening. A second
     # rear guard would overlap that wall; leave the front stair arrival open.
     if BUILD_SECOND_FLOOR_CEILINGS and not SECOND_FLOOR_CUTAWAY:
@@ -1919,7 +1947,8 @@ if BUILD_FIRST_FLOOR:
     print('First-floor interior added; mirrored with the right-hand garage: %s.' % RIGHT_HAND_GARAGE)
     print('Includes rear garage bay, service/pantry rooms, enclosed den, foyer, powder, kitchen, cafe and great room.')
     print('Den: solid rear wall and inward-opening foyer double doors; DEN_DOORS_OPEN = %s.' % DEN_DOORS_OPEN)
-    print('Plan-aligned stairs: low rear treads beneath the upper floor; powder room below the high end.')
+    print('Plan-aligned stairs: carpeted treads, risers and landing; solid drywall separators, no balusters.')
+    print('Neutral carpet color and drywall half-wall height are placeholders; powder clearance retained.')
     print('Optional kitchen refrigerator: %s.' % FIRST_FLOOR_REFRIGERATOR)
 if BUILD_SECOND_FLOOR:
     print('Second floor: master suite, bedrooms 2/3, bath 2, closets, utility, HVAC and loft.')
