@@ -12,7 +12,10 @@ REFERENCE / LIMITATIONS
   Plan-derived: projecting 18'4\" wide garage, recessed entry, nearly square
   upper floor, 16'4\" x 8' rear lanai, rear openings and upper side openings.
   Ceiling references: ground 9'4\", upper 8'8\". Exterior widths include walls.
-  Heights of openings, roof pitches, trim and colors estimated from rendering.
+  Heights of openings, roof pitches and trim estimated from rendering.
+  Colors updated from supplied coloring.jpeg: white body/trim, charcoal accents
+  and roof, pale blue-gray entry door. Photo-based approximations, not paint codes.
+  Only colors/material assignments changed; the original geometry is retained.
   Side/rear finishes and lanai roof are inferred, not documented elevations.
   Optional lanai extension and optional ground stair window are NOT included.
   Exterior shell only: backed glazing and closed doors; no interior layout.
@@ -111,24 +114,30 @@ def material(name, rgb, roughness=0.65, noise=0.0, metallic=0.0):
     return mat
 
 
+# Color-only update from the supplied coloring.jpeg (the central white home).
+# Approximate paint/base colors, not sampled shadow or sky-reflection colors.
+# Photo lighting and Blender lighting affect appearance; no paint codes supplied.
+# Keep the original geometry, roof profile and garage-left orientation.
+# Legacy 'blue' and 'wood' keys now mean charcoal shutters and black accents.
 M = {
-    'siding': material('warm tan lap siding', (0.69, 0.65, 0.54), noise=0.001),
-    'stucco': material('sand stucco', (0.74, 0.71, 0.62), noise=0.007),
-    'gable': material('taupe gable boards', (0.62, 0.59, 0.49), noise=0.001),
-    'trim': material('warm ivory painted trim', (0.92, 0.91, 0.85), 0.52),
-    'blue': material('muted navy door and shutters', (0.23, 0.31, 0.35), 0.53),
-    'blue_edge': material('shutter battens', (0.19, 0.26, 0.30), 0.53),
-    'wood': material('brown window frames and brackets', (0.29, 0.245, 0.19), 0.54),
-    'garage': material('chocolate garage door', (0.36, 0.28, 0.24), 0.57),
-    'panel': material('garage raised panels', (0.40, 0.315, 0.27), 0.54),
-    'recess': material('panel and sash recesses', (0.18, 0.17, 0.15), 0.76),
+    'siding': material('soft white lap siding', (0.91, 0.915, 0.915), noise=0.001),
+    'stucco': material('soft white stucco', (0.89, 0.895, 0.885), noise=0.007),
+    'gable': material('white gable boards', (0.91, 0.915, 0.915), noise=0.001),
+    'trim': material('clean white painted trim', (0.95, 0.95, 0.94), 0.52),
+    'blue': material('charcoal slate shutters', (0.235, 0.26, 0.29), 0.53),
+    'blue_edge': material('charcoal shutter battens', (0.225, 0.25, 0.28), 0.53),
+    'door': material('pale blue gray front door', (0.65, 0.725, 0.755), 0.53),
+    'wood': material('near black window frames and gable brackets', (0.14, 0.155, 0.17), 0.54),
+    'garage': material('charcoal slate garage door', (0.235, 0.26, 0.29), 0.57),
+    'panel': material('charcoal slate garage raised panels', (0.245, 0.27, 0.30), 0.54),
+    'recess': material('neutral dark panel and sash recesses', (0.12, 0.135, 0.15), 0.76),
     'glass': material('opaque dark reflective exterior glazing', (0.115, 0.17, 0.18), 0.16, metallic=0.35),
     'concrete': material('foundation and porch slab', (0.61, 0.60, 0.55), noise=0.003),
-    'roofbase': material('brown shingle underlay', (0.24, 0.195, 0.16), 0.88),
-    'metal': material('aged dark hardware', (0.19, 0.17, 0.13), 0.3, metallic=0.75),
+    'roofbase': material('dark charcoal roof underlay', (0.18, 0.185, 0.195), 0.88),
+    'metal': material('black door hardware', (0.105, 0.115, 0.125), 0.3, metallic=0.75),
 }
-SHINGLES = [material('brown asphalt shingle %02d' % i,
-                    (0.38 * f, 0.305 * f, 0.25 * f), 0.9, noise=0.0015)
+SHINGLES = [material('charcoal gray roof shingle %02d' % i,
+                    (0.335 * f, 0.34 * f, 0.35 * f), 0.9, noise=0.0015)
             for i, f in enumerate((0.83, 0.90, 0.96, 1.0, 1.045, 1.09, 1.14))]
 
 
@@ -413,9 +422,9 @@ def entry_door(f, op):
     z, t = op['z'], op['z'] + op['h']
     surround(f, op, width=0.105, sill=False)
     f.part('front door shadow reveal', a, b, -0.13, -0.09, z, t, M['recess'])
-    f.part('navy front door', a + 0.026, b - 0.026, -0.085, -0.028, z + 0.02, t - 0.025, M['blue'])
-    raised_panel(f, 'door tall upper panel', a + 0.14, b - 0.14, z + 0.80, t - 0.16, M['blue'], -0.025)
-    raised_panel(f, 'door lower panel', a + 0.14, b - 0.14, z + 0.18, z + 0.68, M['blue'], -0.025)
+    f.part('pale blue gray front door', a + 0.026, b - 0.026, -0.085, -0.028, z + 0.02, t - 0.025, M['door'])
+    raised_panel(f, 'door tall upper panel', a + 0.14, b - 0.14, z + 0.80, t - 0.16, M['door'], -0.025)
+    raised_panel(f, 'door lower panel', a + 0.14, b - 0.14, z + 0.18, z + 0.68, M['door'], -0.025)
     f.part('door threshold', a - 0.02, b + 0.02, -0.12, 0.17, z - 0.015, z + 0.017, M['concrete'])
     f.part('lock escutcheon', b - 0.14, b - 0.095, -0.022, 0.01, z + 1.0, z + 1.16, M['metal'], 0.008)
     f.part('door lever', b - 0.22, b - 0.105, 0.01, 0.045, z + 1.035, z + 1.06, M['metal'], 0.005)
