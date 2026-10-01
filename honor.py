@@ -35,6 +35,12 @@ REFERENCE / LIMITATIONS
   The brochure's rear 11'4\" x 13'1\" GARAGE bay remains part of the garage.
   Interior finishes, service-room labels, cabinets and stair details inferred.
   Both floors have clear glazing and statically open room doors by default.
+  User glazing revision: windows, sliders and shower glass use separate thin,
+  double-sided alpha-blended panes for GLB / Three.js. Frames remain opaque.
+  GLASS_OPACITY controls visibility; this is not physically refractive glass.
+  Export full materials (not placeholders) and keep glass separate from frames.
+  Transparent sorting can still show artifacts with overlapping panes; inspect
+  the exported GLB from both inside and outside in the target Three.js viewer.
   Upper floor: master bedroom, standard master bath and separate WC, walk-in
   and reach-in closets, bedrooms 2/3 with closets, bath 2, utility, HVAC and loft.
   Upper ceiling is 8'8\" above its finished floor. All partitions, doors, floors,
@@ -102,6 +108,15 @@ MODEL_SHINGLES = True            # actual clipped, overlapping shingle geometry
 SHINGLE_WIDTH = 0.305
 SHINGLE_EXPOSURE = 0.145
 SEED = 1701
+
+# GLB / Three.js glazing: lightweight alpha blending, not refractive glass.
+# 0 = invisible, 1 = opaque. Keep a faint tint so the panes remain visible.
+GLASS_OPACITY = 0.12
+GLASS_RGB = (0.88, 0.95, 0.98)
+GLASS_ROUGHNESS = 0.08
+assert 0.0 <= GLASS_OPACITY < 1.0
+assert all(0.0 <= channel <= 1.0 for channel in GLASS_RGB)
+assert 0.0 <= GLASS_ROUGHNESS <= 1.0
 
 # First-floor increment. Coordinates below use the brochure's LEFT-garage frame;
 # Geometry.finish() mirrors the entire house/interior together exactly once.
@@ -250,6 +265,8 @@ COL['stair_rear_clearance_m'] = STAIR_REAR_CLEARANCE
 COL['stair_finish'] = 'User requested carpet on treads, risers and upper landing; color inferred'
 COL['stair_separator'] = 'User requested solid drywall instead of open balusters'
 COL['stair_drywall_height_m'] = STAIR_DRYWALL_HEIGHT
+COL['glazing_finish'] = 'Separate double-sided alpha-blended panes; opaque frames; GLB / Three.js target'
+COL['glazing_opacity'] = GLASS_OPACITY
 
 
 # Always use lit Principled materials to reveal siding and shingle geometry.
@@ -296,6 +313,40 @@ def material(name, rgb, roughness=0.65, noise=0.0, metallic=0.0):
     return mat
 
 
+def transparent_glass_material():
+    """Core glTF alphaMode=BLEND; no transmission extension required."""
+    mat = material('Glass | transparent GLB glazing', GLASS_RGB, GLASS_ROUGHNESS)
+    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+    rgba = tuple(linear(c) for c in GLASS_RGB) + (GLASS_OPACITY,)
+    mat.diffuse_color = rgba
+    bsdf.inputs['Base Color'].default_value = rgba
+    bsdf.inputs['Alpha'].default_value = GLASS_OPACITY
+    # Alpha blending is intentional: layered windows should remain see-through
+    # without relying on a renderer's transmission/refraction pass.
+    transmission = bsdf.inputs.get('Transmission Weight')
+    if transmission is None:
+        transmission = bsdf.inputs.get('Transmission')
+    if transmission is not None:
+        transmission.default_value = 0.0
+    # Blender 4.2+ and legacy 3.6/4.0/4.1 material settings respectively.
+    if hasattr(mat, 'surface_render_method'):
+        mat.surface_render_method = 'BLENDED'
+    elif hasattr(mat, 'blend_method'):
+        mat.blend_method = 'BLEND'
+    else:
+        raise RuntimeError('This Blender version has no supported glass alpha-blend setting.')
+    mat.use_backface_culling = False  # Exports as doubleSided for thin panes.
+    if hasattr(mat, 'use_transparency_overlap'):
+        mat.use_transparency_overlap = False
+    elif hasattr(mat, 'show_transparent_back'):
+        mat.show_transparent_back = False
+    if hasattr(mat, 'shadow_method'):
+        mat.shadow_method = 'NONE'
+    mat['honor_glazing'] = True
+    mat['finish_note'] = 'Alpha-blended glass approximation; not physical refraction'
+    return mat
+
+
 # Paint RGB values transcribed from paint_codes.md; no external file needed.
 # Treat the supplied 8-bit RGB values as sRGB. material() converts them to linear
 # exactly once. LRV is retained as reference metadata, NOT a brightness multiplier.
@@ -335,6 +386,7 @@ M = {
     'panel': paint('garage raised panels', 'Witchcraft', 0.54),
     'recess': material('neutral dark panel and sash recesses', (0.12, 0.135, 0.15), 0.76),
     'glass': material('opaque dark reflective exterior glazing', (0.115, 0.17, 0.18), 0.16, metallic=0.35),
+    'clear_glass': transparent_glass_material(),
     'concrete': material('foundation and porch slab', (0.61, 0.60, 0.55), noise=0.003),
     'roofbase': material('dark charcoal roof underlay', (0.18, 0.185, 0.195), 0.88),
     'metal': material('black door hardware', (0.105, 0.115, 0.125), 0.3, metallic=0.75),
@@ -359,15 +411,8 @@ if BUILD_FIRST_FLOOR or BUILD_SECOND_FLOOR:
         'int_ceramic': material('Interior | white sanitary ceramic', (0.94, 0.95, 0.93), 0.22),
         'int_steel': material('Interior | brushed appliance steel', (0.60, 0.62, 0.64), 0.30, metallic=0.8),
         'int_dark': material('Interior | appliance glass and recesses', (0.06, 0.075, 0.08), 0.24),
-        'int_glass': material('Interior | clear architectural glazing', (0.98, 0.995, 1.0), 0.08),
+        'int_glass': M['clear_glass'],  # Same export-friendly glazing indoors and out.
     })
-    glazing = M['int_glass'].node_tree.nodes.get('Principled BSDF')
-    transmission = glazing.inputs.get('Transmission Weight')
-    if transmission is None:
-        transmission = glazing.inputs.get('Transmission')
-    if transmission is not None:
-        transmission.default_value = 1.0
-    glazing.inputs['IOR'].default_value = 1.45
 
 
 # ------------------------------- mesh utilities ------------------------------
@@ -453,6 +498,27 @@ def box(name, lo, hi, mat, bevel=0.0):
     g = Geometry()
     g.box(lo, hi)
     return g.finish(name, mat, bevel)
+
+
+def glass_panel(name, points):
+    """One double-sided sheet per object, mirrored by Geometry.finish()."""
+    assert len(points) == 4
+    g = Geometry()
+    g.face(points)
+    obj = g.finish(name, M['clear_glass'])
+    # Center each pane's origin without changing its world-space placement.
+    # Keep panes separate from opaque frames for transparent-object sorting.
+    center = sum((v.co for v in obj.data.vertices), Vector((0, 0, 0))) / len(obj.data.vertices)
+    for vertex in obj.data.vertices:
+        vertex.co -= center
+    obj.location = center
+    obj.data.update()
+    obj['honor_glazing'] = True
+    obj['finish'] = 'Transparent glazing; glTF alpha blend'
+    obj['glass_opacity'] = GLASS_OPACITY
+    if hasattr(obj, 'visible_shadow'):
+        obj.visible_shadow = False
+    return obj
 
 
 def beam(name, a, b, width, depth, mat):
@@ -603,9 +669,8 @@ def window(f, op, slider=False):
     a, b = op['u'] - op['w'] / 2, op['u'] + op['w'] / 2
     z, t, c = op['z'], op['z'] + op['h'], op['u']
     surround(f, op, width=0.07 if op['shutters'] else 0.095)
-    clear = ((BUILD_FIRST_FLOOR and FIRST_FLOOR_CLEAR_GLASS)
-             if z < UPPER_FLOOR - 0.1 else
-             (BUILD_SECOND_FLOOR and SECOND_FLOOR_CLEAR_GLASS))
+    # Glass stays transparent even when an interior build is disabled.
+    clear = FIRST_FLOOR_CLEAR_GLASS if z < UPPER_FLOOR - 0.1 else SECOND_FLOOR_CLEAR_GLASS
     if not clear:
         f.part(op['name'] + ' shadow reveal', a, b, -0.11, -0.078, z, t, M['recess'])
     else:
@@ -616,9 +681,21 @@ def window(f, op, slider=False):
         for low, high in ((z, z + 0.035), (t - 0.035, t)):
             f.solid(reveal, a, b, -0.205, -0.06, low, high)
         reveal.finish(f.name + ' | ' + op['name'] + ' open perimeter reveal', M['trim'])
-    f.part(op['name'] + (' clear glazing' if clear else ' backed glazing'),
-           a + 0.04, b - 0.04, -0.075, -0.069 if clear else -0.059,
-           z + 0.035, t - 0.035, M['int_glass'] if clear else M['glass'])
+    if clear:
+        # Thin double-sided sheets avoid duplicate front/back alpha layers.
+        # Slider and triple-window panes remain individually sortable objects.
+        count = 3 if slider or op['w'] > 2.0 else 1
+        for index in range(count):
+            left = a + (b - a) * index / count
+            right = a + (b - a) * (index + 1) / count
+            left += 0.04 if index == 0 else 0.0
+            right -= 0.04 if index == count - 1 else 0.0
+            glass_panel(f.name + ' | ' + op['name'] + ' transparent pane %d' % (index + 1),
+                        [f.p(left, -0.072, z + 0.035), f.p(right, -0.072, z + 0.035),
+                         f.p(right, -0.072, t - 0.035), f.p(left, -0.072, t - 0.035)])
+    else:
+        f.part(op['name'] + ' backed glazing', a + 0.04, b - 0.04,
+               -0.075, -0.059, z + 0.035, t - 0.035, M['glass'])
     g = Geometry()
     for l, r in ((a, a + 0.046), (b - 0.046, b)):
         f.solid(g, l, r, -0.085, -0.012, z, t)
@@ -1776,16 +1853,18 @@ def build_second_floor_fixtures():
                 z + 0.075, 0.045, M['int_ceramic'])
     box(f.name + ' front curb', (sx0, sy0 - 0.035, z),
         (sx1, sy0 + 0.035, z + 0.09), M['int_counter'])
-    box(f.name + ' side glass', (sx0 - 0.014, sy0, z + 0.09),
-        (sx0 - 0.004, sy1, z + 2.06), M['int_glass'])
+    glass_panel(f.name + ' side glass',
+                [(sx0 - 0.009, sy0, z + 0.09), (sx0 - 0.009, sy1, z + 0.09),
+                 (sx0 - 0.009, sy1, z + 2.06), (sx0 - 0.009, sy0, z + 2.06)])
     span = sx1 - sx0
     for k in range(2):
         left = sx0 + 0.018
         if k and not SECOND_FLOOR_OPEN_DOORS:
             left = sx0 + span / 2 - 0.018
         yy = sy0 + 0.016 * k
-        box(f.name + ' sliding glass %d' % k, (left, yy, z + 0.10),
-            (left + span / 2, yy + 0.008, z + 2.04), M['int_glass'])
+        glass_panel(f.name + ' sliding glass %d' % k,
+                    [(left, yy + 0.004, z + 0.10), (left + span / 2, yy + 0.004, z + 0.10),
+                     (left + span / 2, yy + 0.004, z + 2.04), (left, yy + 0.004, z + 2.04)])
         beam(f.name + ' glass pull %d' % k, (left + span / 2 - 0.08, yy - 0.018, z + 0.95),
              (left + span / 2 - 0.08, yy - 0.018, z + 1.17), 0.016, 0.016, M['int_steel'])
     for h in (0.095, 2.055):
@@ -1965,6 +2044,9 @@ if BUILD_SECOND_FLOOR:
 bpy.context.view_layer.update()
 print('Honor FH-1 house created: %d mesh objects in %s.' % (len(COL.objects), COLLECTION_NAME))
 print('Front is -Y. Unseen elevations and roof dimensions are approximations.')
+print('Glazing: separate transparent panes, opacity %.2f; window switches: ground=%s, upper=%s.' %
+      (GLASS_OPACITY, FIRST_FLOOR_CLEAR_GLASS, SECOND_FLOOR_CLEAR_GLASS))
+print('GLB: export full materials and keep glass separate; inspect transparency in Three.js.')
 if BUILD_FIRST_FLOOR:
     print('First-floor interior added; mirrored with the right-hand garage: %s.' % RIGHT_HAND_GARAGE)
     print('Includes rear garage bay, service/pantry rooms, enclosed den, foyer, powder, kitchen, cafe and great room.')
