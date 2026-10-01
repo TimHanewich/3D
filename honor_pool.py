@@ -40,7 +40,7 @@ from mathutils import Vector, Matrix
 
 # ------------------------------- user switches -------------------------------
 BUILD_SCREEN_ENCLOSURE = True     # False gives the unobstructed supplied render view
-BUILD_CHILD_BARRIER = True        # False hides the barrier omitted in the renders
+BUILD_CHILD_BARRIER = False       # Child barrier omitted at user's request
 BUILD_EQUIPMENT = True
 BUILD_WATER = True
 BUILD_WATERFALL = True
