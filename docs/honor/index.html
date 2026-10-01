@@ -69,7 +69,7 @@
     const modeLabel = document.querySelector('#mode');
     const crosshair = document.querySelector('#crosshair');
     const errorDetails = document.querySelector('#error-details');
-    const modelUrl = 'https://github.com/TimHanewich/3D/releases/download/6077254e/scene.glb';
+    const modelUrl = './scene.glb';
     let phase = 'loading';
     let loadStage = 'Checking the page setup';
 
@@ -226,8 +226,8 @@
       const ktx2 = new KTX2Loader().setTranscoderPath(base + 'basis/').detectSupport(renderer);
       const loader = new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
       let gltf;
-      loadStage = 'Downloading or decoding the model from GitHub';
-      status.textContent = 'Downloading the model from GitHub…';
+      loadStage = 'Loading or decoding scene.glb';
+      status.textContent = 'Loading scene.glb…';
       try {
         gltf = await loader.loadAsync(modelUrl, event => {
           if (event.lengthComputable && event.total > 0) {
