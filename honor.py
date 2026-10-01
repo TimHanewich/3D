@@ -1,6 +1,6 @@
 # Written by GPT-6-astra on medium reasoning on Oct 1 2026
 
-"""Honor / Grand Park — FH-1 exterior reconstruction.
+"""Honor / Grand Park — FH-1 exterior and first-floor interior.
 
 Run this entire file in Blender's Text Editor. No add-ons or external textures.
 Creates only mesh objects and materials in the HONOR_FH1 collection; rerunning
@@ -25,7 +25,17 @@ REFERENCE / LIMITATIONS
   Set RIGHT_HAND_GARAGE = False to restore the brochure's left-hand layout.
   Side/rear finishes and lanai roof are inferred, not documented elevations.
   Optional lanai extension and optional ground stair window are NOT included.
-  Exterior shell only: backed glazing and closed doors; no interior layout.
+  First-floor increment: leisure, foyer, powder bath, kitchen, cafe, great room,
+  service vestibule/pantry, rear garage extension and straight stair flight.
+  Interior traced from honor_page-0002.jpg and fitted to the existing shell;
+  small partition offsets and the entry-door alignment are adjusted to fit.
+  The brochure's rear 11'4\" x 13'1\" GARAGE bay remains part of the garage.
+  Interior finishes, service-room labels, cabinets and stair details inferred.
+  Ground-floor glazing is clear and entry/service doors are statically open
+  by default. Upper-floor rooms remain deferred; upper glazing stays backed.
+  First-floor ceiling has a real stairwell opening; no new roof or footprint.
+  Interior switches are below. No loose furniture, optional rooms or lights.
+  Source reviewed only; execute and inspect in Blender before final export.
 
 Coordinates: meters; X left/right, +Y toward rear, +Z up. Front faces -Y.
 Designed for Blender 3.6+ using direct mesh creation, not context-sensitive ops.
@@ -69,6 +79,29 @@ MODEL_SHINGLES = True            # actual clipped, overlapping shingle geometry
 SHINGLE_WIDTH = 0.305
 SHINGLE_EXPOSURE = 0.145
 SEED = 1701
+
+# First-floor increment. Coordinates below use the brochure's LEFT-garage frame;
+# Geometry.finish() mirrors the entire house/interior together exactly once.
+BUILD_FIRST_FLOOR = True
+BUILD_FIRST_FLOOR_CEILINGS = True  # False opens the floor plate for inspection
+BUILD_FIRST_FLOOR_FIXTURES = True  # Kitchen, pantry shelves and powder fixtures
+FIRST_FLOOR_OPEN_DOORS = True     # Static open leaves for walkthrough access
+FIRST_FLOOR_CLEAR_GLASS = True    # Ground-floor glazing only; upper shell retained
+INTERIOR_WALL_T = 0.115
+INTERIOR_FLOOR_Z = FF + 0.018
+INTERIOR_CEILING_Z = INTERIOR_FLOOR_Z + (9 + 4 / 12) * 0.3048
+# Traced from honor_page-0002.jpg and fitted to the existing exterior footprint.
+# These partitions/finishes are visual approximations, not construction drawings.
+GARAGE_EXTENSION_X = 3.70
+GARAGE_REAR_Y = 10.25
+SERVICE_REAR_Y = 12.05
+FOYER_X = 7.45
+STAIR_X0, STAIR_X1 = 8.82, W - 0.205
+STAIR_Y0, STAIR_Y1 = 8.68, 12.68  # upper/front landing to lower/rear stair foot
+POWDER_REAR_Y = STAIR_Y0
+assert 0 < GARAGE_EXTENSION_X < GARAGE_W < FOYER_X < STAIR_X0 < STAIR_X1 < W
+assert FRONT < GARAGE_REAR_Y < SERVICE_REAR_Y < BACK
+assert INTERIOR_FLOOR_Z < INTERIOR_CEILING_Z < UPPER_FLOOR
 
 
 # ------------------------------ safe ownership -------------------------------
@@ -188,6 +221,30 @@ M = {
 SHINGLES = [material('charcoal gray roof shingle %02d' % i,
                     (0.335 * f, 0.34 * f, 0.35 * f), 0.9, noise=0.0015)
             for i, f in enumerate((0.83, 0.90, 0.96, 1.0, 1.045, 1.09, 1.14))]
+
+
+# Interior finishes are neutral placeholders, NOT additional exterior paint codes.
+if BUILD_FIRST_FLOOR:
+    M.update({
+        'int_wall': material('Interior | warm off-white drywall - inferred', (0.88, 0.87, 0.83), 0.83),
+        'int_trim': material('Interior | white doors and millwork - inferred', (0.94, 0.935, 0.91), 0.56),
+        'int_ceiling': material('Interior | matte white ceiling', (0.93, 0.93, 0.90), 0.92),
+        'int_tile': material('Interior | warm light tile - inferred', (0.76, 0.74, 0.68), 0.55),
+        'int_grout': material('Interior | fine warm grout', (0.57, 0.55, 0.50), 0.88),
+        'int_wood': material('Interior | pale oak leisure floor - inferred', (0.64, 0.51, 0.36), 0.65),
+        'int_counter': material('Interior | pale stone worktop - inferred', (0.88, 0.875, 0.84), 0.34),
+        'int_ceramic': material('Interior | white sanitary ceramic', (0.94, 0.95, 0.93), 0.22),
+        'int_steel': material('Interior | brushed appliance steel', (0.60, 0.62, 0.64), 0.30, metallic=0.8),
+        'int_dark': material('Interior | appliance glass and recesses', (0.06, 0.075, 0.08), 0.24),
+        'int_glass': material('Interior | clear ground-floor glazing', (0.98, 0.995, 1.0), 0.08),
+    })
+    glazing = M['int_glass'].node_tree.nodes.get('Principled BSDF')
+    transmission = glazing.inputs.get('Transmission Weight')
+    if transmission is None:
+        transmission = glazing.inputs.get('Transmission')
+    if transmission is not None:
+        transmission.default_value = 1.0
+    glazing.inputs['IOR'].default_value = 1.45
 
 
 # ------------------------------- mesh utilities ------------------------------
@@ -351,6 +408,31 @@ def wall(facade, bottom, top, openings=(), lap=False):
         for l, r in intervals_without_openings(facade.length, openings, low, high):
             facade.solid(geo, l, r, -0.19, 0, low, high)
     geo.finish(facade.name + ' | closed exterior shell', M['siding'] if lap else M['stucco'])
+    if BUILD_FIRST_FLOOR and bottom < UPPER_FLOOR - 0.1:
+        # Thin interior skin respects precisely the same actual window/door holes.
+        lining, skirting = Geometry(), Geometry()
+        for low, high in zip(levels[:-1], levels[1:]):
+            high = min(high, INTERIOR_CEILING_Z)
+            if high <= low:
+                continue
+            for l, r in intervals_without_openings(facade.length, openings, low, high):
+                facade.solid(lining, l, r, -0.205, -0.19, low, high)
+        for l, r in intervals_without_openings(facade.length, openings,
+                                               INTERIOR_FLOOR_Z, INTERIOR_FLOOR_Z + 0.10):
+            facade.solid(skirting, l, r, -0.218, -0.205,
+                         INTERIOR_FLOOR_Z, INTERIOR_FLOOR_Z + 0.10)
+        lining.finish('Interior | ' + facade.name + ' drywall lining', M['int_wall'])
+        skirting.finish('Interior | ' + facade.name + ' baseboard', M['int_trim'])
+        for op in openings:
+            a, b = op['u'] - op['w'] / 2, op['u'] + op['w'] / 2
+            z, t = op['z'], op['z'] + op['h']
+            trim = Geometry()
+            facade.solid(trim, a - 0.065, a, -0.22, -0.19, z, t + 0.065)
+            facade.solid(trim, b, b + 0.065, -0.22, -0.19, z, t + 0.065)
+            facade.solid(trim, a, b, -0.22, -0.19, t, t + 0.065)
+            if op['kind'] == 'window':
+                facade.solid(trim, a - 0.065, b + 0.065, -0.245, -0.06, z - 0.035, z)
+            trim.finish('Interior | ' + facade.name + ' | ' + op['name'] + ' casing', M['int_trim'])
     if lap:
         boards = Geometry()
         z = bottom
@@ -394,9 +476,20 @@ def window(f, op, slider=False):
     a, b = op['u'] - op['w'] / 2, op['u'] + op['w'] / 2
     z, t, c = op['z'], op['z'] + op['h'], op['u']
     surround(f, op, width=0.07 if op['shutters'] else 0.095)
-    f.part(op['name'] + ' shadow reveal', a, b, -0.11, -0.078, z, t, M['recess'])
-    f.part(op['name'] + ' backed glazing', a + 0.04, b - 0.04, -0.075, -0.059,
-           z + 0.035, t - 0.035, M['glass'])
+    clear = BUILD_FIRST_FLOOR and FIRST_FLOOR_CLEAR_GLASS and z < UPPER_FLOOR - 0.1
+    if not clear:
+        f.part(op['name'] + ' shadow reveal', a, b, -0.11, -0.078, z, t, M['recess'])
+    else:
+        # A perimeter reveal, not the old opaque slab across the whole opening.
+        reveal = Geometry()
+        for l, r in ((a, a + 0.035), (b - 0.035, b)):
+            f.solid(reveal, l, r, -0.205, -0.06, z, t)
+        for low, high in ((z, z + 0.035), (t - 0.035, t)):
+            f.solid(reveal, a, b, -0.205, -0.06, low, high)
+        reveal.finish(f.name + ' | ' + op['name'] + ' open perimeter reveal', M['trim'])
+    f.part(op['name'] + (' clear glazing' if clear else ' backed glazing'),
+           a + 0.04, b - 0.04, -0.075, -0.069 if clear else -0.059,
+           z + 0.035, t - 0.035, M['int_glass'] if clear else M['glass'])
     g = Geometry()
     for l, r in ((a, a + 0.046), (b - 0.046, b)):
         f.solid(g, l, r, -0.085, -0.012, z, t)
@@ -477,10 +570,42 @@ def garage_door(f, op):
                          l, r, low + 0.075, low + h - 0.072, M['panel'], -0.041)
 
 
+def interior_door_leaf(name, hinge, direction, width, height, mat):
+    """Static leaf built before the house-wide mirror; no negative object scales."""
+    hinge, along = Vector(hinge), Vector(direction).normalized()
+    side = Vector((-along.y, along.x, 0))
+    end = hinge + along * width
+    g = Geometry()
+    g.prism([hinge - side * 0.021, end - side * 0.021,
+             end + side * 0.021, hinge + side * 0.021], (0, 0, height))
+    # Simple recessed-looking field panels on both sides, with actual thickness.
+    for sign in (-1, 1):
+        for low, high in ((0.15, 0.72), (0.86, height - 0.16)):
+            a = hinge + along * 0.10 + side * (sign * 0.022) + Vector((0, 0, low))
+            b = hinge + along * (width - 0.10) + side * (sign * 0.022) + Vector((0, 0, low))
+            g.prism([a, b, b + Vector((0, 0, high - low)),
+                     a + Vector((0, 0, high - low))], side * (sign * 0.009))
+        p = hinge + along * (width - 0.10) + side * (sign * 0.045) + Vector((0, 0, 1.0))
+        beam(name + ' lever', p, p - along * 0.115, 0.022, 0.022, M['metal'])
+    return g.finish(name + ' static door leaf', mat, 0.002)
+
+
 def entry_door(f, op):
     a, b = op['u'] - op['w'] / 2, op['u'] + op['w'] / 2
     z, t = op['z'], op['z'] + op['h']
     surround(f, op, width=0.105, sill=False)
+    if BUILD_FIRST_FLOOR and FIRST_FLOOR_OPEN_DOORS:
+        jamb = Geometry()
+        f.solid(jamb, a, a + 0.025, -0.205, -0.015, z, t)
+        f.solid(jamb, b - 0.025, b, -0.205, -0.015, z, t)
+        f.solid(jamb, a, b, -0.205, -0.015, t - 0.025, t)
+        jamb.finish('Interior | front entrance open jamb', M['int_trim'])
+        interior_door_leaf('Interior | SkyDiving entry opened inward',
+                           f.p(b - 0.035, -0.08, z + 0.025), -f.n,
+                           op['w'] - 0.07, op['h'] - 0.05, M['door'])
+        f.part('door threshold', a - 0.02, b + 0.02, -0.22, 0.17,
+               z - 0.015, INTERIOR_FLOOR_Z, M['concrete'])
+        return
     f.part('front door shadow reveal', a, b, -0.13, -0.09, z, t, M['recess'])
     f.part('pale blue gray front door', a + 0.026, b - 0.026, -0.085, -0.028, z + 0.02, t - 0.025, M['door'])
     raised_panel(f, 'door tall upper panel', a + 0.14, b - 0.14, z + 0.80, t - 0.16, M['door'], -0.025)
@@ -596,10 +721,28 @@ def ridge_caps(name, a, b, width=0.20):
 box('Main foundation', (0, FRONT, 0), (W, BACK, FF), M['concrete'])
 box('Projecting garage foundation', (0, 0, 0), (GARAGE_W, FRONT, FF), M['concrete'])
 box('Recessed entry porch slab', (GARAGE_W, PORCH_FRONT, 0.025), (W, FRONT, FF), M['concrete'])
-box('Entry threshold step', (8.01, PORCH_FRONT - 0.30, 0.015), (9.16, PORCH_FRONT, 0.105), M['concrete'])
+entry_center_x = (FOYER_X + STAIR_X0) / 2 if BUILD_FIRST_FLOOR else GARAGE_W + 2.53
+step_center_x = entry_center_x if BUILD_FIRST_FLOOR else 8.585
+box('Entry threshold step', (step_center_x - 0.575, PORCH_FRONT - 0.30, 0.015),
+    (step_center_x + 0.575, PORCH_FRONT, 0.105), M['concrete'])
 box('Rear lanai slab', (0, BACK, 0.025), (LANAI_W, BACK + LANAI_D, FF), M['concrete'])
-# Ceiling closure over the exterior porch; no interior floor plan.
-box('Upper story sealed underside', (0, FRONT, UPPER_FLOOR - 0.16), (W, BACK, UPPER_FLOOR), M['stucco'])
+# Replace the sealed plate with an actual stairwell opening for the first floor.
+if BUILD_FIRST_FLOOR:
+    if BUILD_FIRST_FLOOR_CEILINGS:
+        hole_x0, hole_x1 = STAIR_X0 - 0.04, STAIR_X1 + 0.02
+        hole_y0, hole_y1 = STAIR_Y0, STAIR_Y1 + 0.10
+        ceiling = Geometry()
+        for x0, y0, x1, y1 in ((0, FRONT, hole_x0, BACK),
+                               (hole_x1, FRONT, W, BACK),
+                               (hole_x0, FRONT, hole_x1, hole_y0),
+                               (hole_x0, hole_y1, hole_x1, BACK)):
+            ceiling.box((x0, y0, INTERIOR_CEILING_Z), (x1, y1, UPPER_FLOOR))
+        ceiling.finish('Interior | first floor ceiling and upper plate - stair opening', M['int_ceiling'])
+        box('Interior | forward garage ceiling', (0.19, 0.19, GARAGE_EAVE - 0.015),
+            (GARAGE_W - 0.19, FRONT, GARAGE_EAVE), M['int_ceiling'])
+else:
+    box('Upper story sealed underside', (0, FRONT, UPPER_FLOOR - 0.16),
+        (W, BACK, UPPER_FLOOR), M['stucco'])
 
 front_garage = Facade('Garage front', (0, 0), (1, 0), (0, -1), GARAGE_W)
 wall(front_garage, FF, GARAGE_EAVE,
@@ -609,7 +752,7 @@ wall(Facade('Garage right return', (GARAGE_W, 0), (0, 1), (1, 0), FRONT), FF, GA
 entry = Facade('Recessed entry', (GARAGE_W, FRONT), (1, 0), (0, -1), W - GARAGE_W)
 wall(entry, FF, UPPER_FLOOR,
      [opening('leisure room window', 0.93, 0.92, FF + 0.58, 1.52),
-      opening('front entrance', 2.53, 0.965, FF, 2.44, 'entry')], lap=True)
+      opening('front entrance', entry_center_x - GARAGE_W, 0.965, FF, 2.44, 'entry')], lap=True)
 wall(Facade('Left main lower', (0, FRONT), (0, 1), (-1, 0), BACK - FRONT), FF, UPPER_FLOOR)
 wall(Facade('Right main lower', (W, FRONT), (0, 1), (1, 0), BACK - FRONT), FF, UPPER_FLOOR)
 rear_lower = Facade('Rear ground floor', (0, BACK), (1, 0), (0, 1), W)
@@ -773,8 +916,390 @@ g.prism([(W, PORCH_FRONT, 3.045), (W, FRONT, 3.045),
          (W, PORCH_FRONT, LOW_EAVE + (PORCH_FRONT - porch_eave_y) * PORCH_PITCH - 0.08)], (-0.10, 0, 0))
 g.finish('Entry right roof-side closure', M['stucco'])
 
+# ----------------------- first-floor interior increment ----------------------
+# All builders below work in the brochure frame. Geometry.finish() handles the
+# right-hand-garage mirror for walls, fixtures, stairs and hardware alike.
+# Room names are object metadata, not floating text or extra scene collections.
+
+def interior_partition(name, a, b, doors=(), thickness=INTERIOR_WALL_T):
+    """doors = (distance from a, opening width, opening height), in meters."""
+    delta = Vector((b[0] - a[0], b[1] - a[1], 0))
+    length = delta.length
+    tangent = delta.normalized()
+    facade = Facade('Interior | ' + name, a, tangent,
+                    (-tangent.y, tangent.x), length)
+    openings = [opening('passage %d' % i, start + width / 2, width,
+                        INTERIOR_FLOOR_Z, height)
+                for i, (start, width, height) in enumerate(doors)]
+    for start, width, height in doors:
+        assert 0 <= start < start + width <= length + 1e-6
+        assert 0 < height < INTERIOR_CEILING_Z - INTERIOR_FLOOR_Z
+    levels = sorted(set([INTERIOR_FLOOR_Z, INTERIOR_CEILING_Z] +
+                        [op['z'] + op['h'] for op in openings]))
+    g, base = Geometry(), Geometry()
+    for low, high in zip(levels[:-1], levels[1:]):
+        for l, r in intervals_without_openings(length, openings, low, high):
+            facade.solid(g, l, r, -thickness / 2, thickness / 2, low, high)
+    g.finish('Interior | ' + name + ' partition with open doorways', M['int_wall'])
+    for l, r in intervals_without_openings(length, openings,
+                                           INTERIOR_FLOOR_Z, INTERIOR_FLOOR_Z + 0.10):
+        for sign in (-1, 1):
+            depths = sorted((sign * thickness / 2, sign * (thickness / 2 + 0.012)))
+            facade.solid(base, l, r, *depths, INTERIOR_FLOOR_Z, INTERIOR_FLOOR_Z + 0.10)
+    base.finish('Interior | ' + name + ' baseboards', M['int_trim'])
+    trim = Geometry()
+    for op in openings:
+        l, r = op['u'] - op['w'] / 2, op['u'] + op['w'] / 2
+        top = op['z'] + op['h']
+        # Narrow jambs and casing only; no panel spans the doorway.
+        facade.solid(trim, l, l + 0.018, -thickness / 2, thickness / 2,
+                     INTERIOR_FLOOR_Z, top)
+        facade.solid(trim, r - 0.018, r, -thickness / 2, thickness / 2,
+                     INTERIOR_FLOOR_Z, top)
+        facade.solid(trim, l, r, -thickness / 2, thickness / 2, top - 0.018, top)
+        for sign in (-1, 1):
+            d0, d1 = sorted((sign * thickness / 2, sign * (thickness / 2 + 0.015)))
+            facade.solid(trim, l - 0.06, l, d0, d1, INTERIOR_FLOOR_Z, top + 0.06)
+            facade.solid(trim, r, r + 0.06, d0, d1, INTERIOR_FLOOR_Z, top + 0.06)
+            facade.solid(trim, l, r, d0, d1, top, top + 0.06)
+    trim.finish('Interior | ' + name + ' door jambs and casing', M['int_trim'])
+
+
+def interior_floor(name, rect, wood=False, holes=()):
+    x0, y0, x1, y1 = rect
+    g = Geometry()
+    # Separate rectangular floor regions around the garage extension and leisure.
+    def subtract(r, h):
+        a, b, c, d = r
+        l, f, rr, back = max(a, h[0]), max(b, h[1]), min(c, h[2]), min(d, h[3])
+        if l >= rr or f >= back:
+            return [r]
+        return [p for p in ((a, b, l, d), (rr, b, c, d), (l, b, rr, f), (l, back, rr, d))
+                if p[2] - p[0] > 1e-6 and p[3] - p[1] > 1e-6]
+    regions = [rect]
+    for hole in holes:
+        regions = [piece for r in regions for piece in subtract(r, hole)]
+    for a, b, c, d in regions:
+        g.box((a, b, FF), (c, d, INTERIOR_FLOOR_Z - 0.006))
+    g.finish('Interior | ' + name + ' floor joint bed', M['int_grout'])
+    g = Geometry()
+    dx, dy = (0.18, 1.20) if wood else (0.60, 0.60)
+    column = 0
+    x = x0
+    while x < x1 - 1e-6:
+        y = y0 - (0.4 * (column % 3) if wood else 0.0)
+        while y < y1 - 1e-6:
+            tile = (x, max(y, y0), min(x + dx, x1), min(y + dy, y1))
+            parts = [tile]
+            for hole in holes:
+                parts = [piece for r in parts for piece in subtract(r, hole)]
+            for a, b, c, d in parts:
+                if c - a > 0.004 and d - b > 0.004:
+                    g.box((a + 0.001, b + 0.001, INTERIOR_FLOOR_Z - 0.006),
+                          (c - 0.001, d - 0.001, INTERIOR_FLOOR_Z))
+            y += dy
+        x += dx
+        column += 1
+    obj = g.finish('Interior | ' + name + (' floor planks' if wood else ' floor tiles'),
+                   M['int_wood'] if wood else M['int_tile'])
+    if obj:
+        obj['room'] = name
+        obj['walkable'] = True
+        obj['finish_note'] = 'Inferred finish; brochure gives layout, not material selections'
+
+
+def interior_tube(name, a, b, radius, mat, sides=16):
+    a, b = Vector(a), Vector(b)
+    direction = b - a
+    axis = direction.normalized()
+    reference = Vector((1, 0, 0)) if abs(axis.z) > 0.9 else Vector((0, 0, 1))
+    u = axis.cross(reference).normalized()
+    v = axis.cross(u).normalized()
+    ring = [a + radius * (u * math.cos(i * math.tau / sides) +
+                          v * math.sin(i * math.tau / sides)) for i in range(sides)]
+    g = Geometry()
+    g.prism(ring, direction)
+    return g.finish('Interior | ' + name, mat)
+
+
+def interior_oval(name, center, profile, mat, sides=32):
+    """Closed oval solid, profile = (x radius, y radius, relative height)."""
+    x, y, z = center
+    rings = [[(x + rx * math.cos(i * math.tau / sides),
+               y + ry * math.sin(i * math.tau / sides), z + h)
+              for i in range(sides)] for rx, ry, h in profile]
+    g = Geometry()
+    g.face(list(reversed(rings[0])))
+    for lower, upper in zip(rings[:-1], rings[1:]):
+        for i in range(sides):
+            j = (i + 1) % sides
+            g.face([lower[i], lower[j], upper[j], upper[i]])
+    g.face(rings[-1])
+    return g.finish('Interior | ' + name, mat)
+
+
+def interior_basin(name, rect, top, depth, mat):
+    """Open rectangular basin with a recessed bottom, not a solid countertop."""
+    a, b, c, d = rect
+    inset = min(0.06, (c - a) / 5, (d - b) / 5)
+    g = Geometry()
+    g.box((a + inset, b + inset, top - depth - 0.012),
+          (c - inset, d - inset, top - depth))
+    # Four sloping solid sides join the open top to the bottom.
+    outer = [(a, b, top), (c, b, top), (c, d, top), (a, d, top)]
+    inner = [(a + inset, b + inset, top - depth),
+             (c - inset, b + inset, top - depth),
+             (c - inset, d - inset, top - depth),
+             (a + inset, d - inset, top - depth)]
+    for i in range(4):
+        j = (i + 1) % 4
+        g.prism([outer[i], inner[i], inner[j], outer[j]], (0, 0, -0.012))
+    g.finish('Interior | ' + name + ' recessed basin', mat)
+    interior_tube(name + ' drain', ((a + c) / 2, (b + d) / 2, top - depth),
+                  ((a + c) / 2, (b + d) / 2, top - depth + 0.003), 0.025, M['int_steel'])
+
+
+def build_first_floor():
+    z, ceiling = INTERIOR_FLOOR_Z, INTERIOR_CEILING_Z
+    inset, half = 0.205, INTERIOR_WALL_T / 2
+    # The brochure explicitly labels the deep rear-left bay as GARAGE, not a den.
+    # Preserve its connection to the projecting two-car garage; do not insert
+    # a wall across the complete FRONT line.
+    interior_partition('garage to leisure', (GARAGE_EXTENSION_X, FRONT),
+                       (GARAGE_EXTENSION_X, SERVICE_REAR_Y), thickness=0.19)
+    interior_partition('garage to recessed leisure front', (GARAGE_EXTENSION_X, FRONT),
+                       (GARAGE_W, FRONT), thickness=0.19)
+    interior_partition('garage rear mud entry', (inset, GARAGE_REAR_Y),
+                       (GARAGE_EXTENSION_X, GARAGE_REAR_Y), [(0.60, 0.86, 2.13)], thickness=0.19)
+    interior_partition('service rooms to kitchen', (inset, SERVICE_REAR_Y),
+                       (GARAGE_EXTENSION_X, SERVICE_REAR_Y), [(0.64, 0.92, 2.13)])
+    interior_partition('pantry side', (1.95, GARAGE_REAR_Y),
+                       (1.95, SERVICE_REAR_Y), [(0.27, 0.83, 2.13)])
+    interior_partition('leisure rear and open foyer passage', (GARAGE_EXTENSION_X, GARAGE_REAR_Y),
+                       (STAIR_X0, GARAGE_REAR_Y),
+                       [(6.25 - GARAGE_EXTENSION_X, STAIR_X0 - 6.25, 2.44)])
+    interior_partition('powder to foyer', (STAIR_X0, FRONT + inset),
+                       (STAIR_X0, POWDER_REAR_Y), [(0.66, 0.76, 2.13)])
+    interior_partition('powder rear below stair landing', (STAIR_X0, POWDER_REAR_Y),
+                       (W - inset, POWDER_REAR_Y))
+    interior_partition('enclosed front stair side', (STAIR_X0, POWDER_REAR_Y),
+                       (STAIR_X0, GARAGE_REAR_Y))
+
+    # Tile across the open kitchen/cafe/great-room/foyer and service spaces.
+    # Leisure flooring changes at the foyer line without an invented dividing wall.
+    leisure = (GARAGE_EXTENSION_X + 0.095, FRONT + 0.095, FOYER_X, GARAGE_REAR_Y)
+    garage = (inset, FRONT, GARAGE_EXTENSION_X + 0.095, GARAGE_REAR_Y + 0.095)
+    interior_floor('kitchen cafe great room foyer and service rooms',
+                   (inset, FRONT, W - inset, BACK - inset), holes=(leisure, garage))
+    interior_floor('leisure', leisure, wood=True)
+    box('Interior | garage rear extension floor finish',
+        (inset, FRONT, FF), (GARAGE_EXTENSION_X - 0.095, GARAGE_REAR_Y - 0.095, FF + 0.004),
+        M['concrete'])
+    box('Interior | garage access threshold', (0.805, GARAGE_REAR_Y - 0.10, FF),
+        (1.665, GARAGE_REAR_Y + 0.11, z), M['int_counter'])
+
+    # Door leaves are separate solids; toggling the switch closes these leaves
+    # without ever filling their wall openings with hidden shadow/backing panels.
+    open_doors = FIRST_FLOOR_OPEN_DOORS
+    interior_door_leaf('Interior | garage service door',
+                       (0.83, GARAGE_REAR_Y + 0.10, z + 0.01),
+                       (0, 1, 0) if open_doors else (1, 0, 0), 0.81, 2.09, M['int_trim'])
+    interior_door_leaf('Interior | pantry door',
+                       (1.95 + half + 0.025, GARAGE_REAR_Y + 1.075, z + 0.01),
+                       (1, 0, 0) if open_doors else (0, -1, 0), 0.78, 2.09, M['int_trim'])
+    interior_door_leaf('Interior | powder bath door',
+                       (STAIR_X0 + half + 0.025, FRONT + inset + 0.685, z + 0.01),
+                       (1, 0, 0) if open_doors else (0, 1, 0), 0.71, 2.09, M['int_trim'])
+
+    # Straight flight occupies the stair strip shown beside foyer/cafe. The exact
+    # rise/run and ascent direction are inferred; no code-compliance claim.
+    # Ascent is toward the FRONT, exiting onto the future loft above the powder.
+    risers = 18
+    landing_z = UPPER_FLOOR + 0.018
+    rise = (landing_z - z) / risers
+    going = (STAIR_Y1 - STAIR_Y0) / (risers - 1)
+    stairs, treads = Geometry(), Geometry()
+    for i in range(risers - 1):
+        rear = STAIR_Y1 - i * going
+        front = rear - going
+        top = z + (i + 1) * rise
+        stairs.box((STAIR_X0 + 0.035, front, z), (STAIR_X1, rear, top - 0.025))
+        treads.box((STAIR_X0 + 0.025, front, top - 0.025),
+                   (STAIR_X1, rear + 0.015, top))
+    stairs.finish('Interior | stair flight solid risers', M['int_trim'])
+    stair_obj = treads.finish('Interior | stair treads to future upper floor', M['int_wood'])
+    stair_obj['walkable'] = True
+    stair_obj['riser_count'] = risers
+    stair_obj['riser_m'] = rise
+    stair_obj['going_m'] = going
+    stair_obj['inferred_direction'] = 'Ascends toward -Y before house mirroring'
+    landing = box('Interior | stair upper landing floor',
+                  (STAIR_X0, STAIR_Y0 - 0.90, UPPER_FLOOR + 0.001),
+                  (STAIR_X1, STAIR_Y0, landing_z), M['int_wood'])
+    landing['walkable'] = True
+    # Flight handrail, balusters and landing guard use real opaque geometry.
+    rail_x = STAIR_X0 + 0.055
+    rail_start = (rail_x, STAIR_Y1 - going / 2, z + rise + 0.92)
+    rail_end = (rail_x, STAIR_Y0 + going / 2, landing_z - rise + 0.92)
+    beam('Interior | stair sloping handrail', rail_start, rail_end, 0.055, 0.055, M['int_wood'])
+    for i in range(risers - 1):
+        y = STAIR_Y1 - (i + 0.5) * going
+        bottom = z + (i + 1) * rise
+        interior_tube('stair baluster %02d' % i, (rail_x, y, bottom),
+                      (rail_x, y, bottom + 0.92), 0.012, M['metal'], 8)
+    for y in (STAIR_Y0 - 0.86, STAIR_Y0):
+        box('Interior | landing guard post', (rail_x - 0.025, y - 0.025, landing_z),
+            (rail_x + 0.025, y + 0.025, landing_z + 0.95), M['int_trim'])
+    beam('Interior | upper landing guard rail', (rail_x, STAIR_Y0 - 0.86, landing_z + 0.95),
+         (rail_x, STAIR_Y0, landing_z + 0.95), 0.055, 0.055, M['int_wood'])
+
+    if BUILD_FIRST_FLOOR_FIXTURES:
+        build_first_floor_fixtures()
+    COL['first_floor_interior'] = True
+    COL['first_floor_reference'] = 'honor_page-0002.jpg, base C-1 first-floor plan; mirrored with exterior'
+    COL['first_floor_rooms'] = 'Leisure; foyer; powder bath; cafe; great room; kitchen; pantry/service vestibule; garage and rear garage extension'
+    COL['first_floor_ceiling_height_m'] = ceiling - z
+    COL['first_floor_limitations'] = 'Partitions fitted to existing shell; finishes, service-room labels, fixtures and stair details inferred. Upper-floor interior deferred.'
+
+
+def build_first_floor_fixtures():
+    z, half = INTERIOR_FLOOR_Z, INTERIOR_WALL_T / 2
+    counter_z = z + 0.90
+    # Kitchen wall run: refrigerator near the pantry, range, base/upper cabinets.
+    # A narrow rear-wall gap keeps the existing lanai slider clear.
+    for index, (y0, y1) in enumerate(((13.12, 13.92), (14.70, 15.55), (15.55, 16.48))):
+        box('Interior | kitchen wall cabinet %d carcass' % index,
+            (0.23, y0, z + 0.10), (0.81, y1, counter_z - 0.04), M['int_trim'])
+        box('Interior | kitchen wall cabinet %d toe kick' % index,
+            (0.24, y0, z), (0.73, y1, z + 0.10), M['int_dark'])
+        box('Interior | kitchen wall counter %d' % index,
+            (0.22, y0, counter_z - 0.04), (0.86, y1, counter_z), M['int_counter'], 0.003)
+        for k in range(2):
+            a, b = y0 + (y1 - y0) * k / 2, y0 + (y1 - y0) * (k + 1) / 2
+            box('Interior | kitchen lower shaker door', (0.811, a + 0.012, z + 0.12),
+                (0.834, b - 0.012, counter_z - 0.075), M['int_trim'], 0.002)
+            beam('Interior | kitchen lower cabinet pull', (0.86, b - 0.06, z + 0.56),
+                 (0.86, b - 0.06, z + 0.70), 0.015, 0.015, M['metal'])
+        box('Interior | kitchen upper cabinet %d' % index, (0.23, y0, z + 1.48),
+            (0.57, y1, z + 2.32), M['int_trim'], 0.003)
+        beam('Interior | kitchen upper cabinet pull', (0.60, (y0 + y1) / 2, z + 1.56),
+             (0.60, (y0 + y1) / 2, z + 1.71), 0.014, 0.014, M['metal'])
+        box('Interior | kitchen backsplash %d' % index,
+            (0.207, y0, counter_z), (0.225, y1, z + 1.48), M['int_tile'])
+    box('Interior | kitchen refrigerator body - assumed appliance', (0.23, 12.19, z),
+        (0.96, 13.06, z + 1.95), M['int_steel'], 0.008)
+    for a, b in ((12.20, 12.615), (12.63, 13.05)):
+        box('Interior | refrigerator front door', (0.963, a, z + 0.05),
+            (0.992, b, z + 1.93), M['int_steel'], 0.004)
+        beam('Interior | refrigerator handle', (1.025, (a + b) / 2, z + 0.90),
+             (1.025, (a + b) / 2, z + 1.40), 0.024, 0.024, M['metal'])
+    box('Interior | kitchen range body', (0.24, 13.95, z + 0.06),
+        (0.84, 14.67, counter_z - 0.025), M['int_steel'], 0.004)
+    box('Interior | range oven glass', (0.844, 14.02, z + 0.20),
+        (0.858, 14.60, z + 0.64), M['int_dark'], 0.006)
+    beam('Interior | oven handle', (0.89, 14.05, z + 0.73),
+         (0.89, 14.56, z + 0.73), 0.025, 0.025, M['int_steel'])
+    box('Interior | range cooktop', (0.24, 13.95, counter_z - 0.025),
+        (0.85, 14.67, counter_z), M['int_dark'])
+    for x in (0.41, 0.68):
+        for y in (14.12, 14.48):
+            interior_tube('cooktop burner', (x, y, counter_z), (x, y, counter_z + 0.008),
+                          0.095, M['int_steel'], 24)
+    box('Interior | range hood canopy', (0.22, 13.91, z + 1.66),
+        (0.84, 14.71, z + 1.78), M['int_steel'], 0.006)
+    box('Interior | range hood flue', (0.23, 14.12, z + 1.78),
+        (0.48, 14.50, z + 2.32), M['int_steel'])
+
+    # Long island with working-side sink/dishwasher and an overhanging cafe side.
+    # Sink cabinet is hollow at the top so geometry does not fill the bowls.
+    box('Interior | island plinth', (2.08, 13.30, z), (3.30, 15.72, z + 0.10), M['int_dark'])
+    island = Geometry()
+    island.box((2.00, 13.25, z + 0.10), (3.35, 15.77, z + 0.15))
+    island.box((3.30, 13.25, z + 0.15), (3.35, 15.77, counter_z - 0.04))
+    for a, b in ((13.25, 13.30), (15.72, 15.77)):
+        island.box((2.00, a, z + 0.15), (3.35, b, counter_z - 0.04))
+    island.finish('Interior | island hollow cabinet carcass', M['int_trim'])
+    for a, b in ((13.28, 13.99), (14.02, 14.83), (14.86, 15.73)):
+        box('Interior | island working-side door', (1.98, a, z + 0.12),
+            (2.01, b, counter_z - 0.05), M['int_trim'])
+        beam('Interior | island cabinet pull', (1.95, (a + b) / 2 - 0.08, z + 0.71),
+             (1.95, (a + b) / 2 + 0.08, z + 0.71), 0.015, 0.015, M['metal'])
+    box('Interior | integrated dishwasher front', (1.958, 13.35, z + 0.12),
+        (1.977, 13.96, counter_z - 0.065), M['int_steel'])
+    beam('Interior | dishwasher pull', (1.92, 13.42, counter_z - 0.13),
+         (1.92, 13.89, counter_z - 0.13), 0.022, 0.022, M['int_steel'])
+    # Four counter strips form a genuine hole around the double sink.
+    for i, (a, b, c, d) in enumerate(((1.95, 13.20, 2.14, 15.82),
+                                      (2.82, 13.20, 3.58, 15.82),
+                                      (2.14, 13.20, 2.82, 14.12),
+                                      (2.14, 15.00, 2.82, 15.82))):
+        box('Interior | island stone countertop segment %d' % i, (a, b, counter_z - 0.04),
+            (c, d, counter_z), M['int_counter'], 0.002)
+    for i, (a, b) in enumerate(((14.12, 14.55), (14.57, 15.00))):
+        interior_basin('kitchen sink bowl %d' % i, (2.14, a, 2.82, b),
+                       counter_z, 0.19, M['int_steel'])
+    box('Interior | sink center divider', (2.14, 14.55, counter_z - 0.19),
+        (2.82, 14.57, counter_z), M['int_steel'])
+    for a, b in (((2.87, 14.56, counter_z), (2.87, 14.56, counter_z + 0.29)),
+                 ((2.87, 14.56, counter_z + 0.29), (2.58, 14.56, counter_z + 0.29)),
+                 ((2.58, 14.56, counter_z + 0.29), (2.58, 14.56, counter_z + 0.23))):
+        interior_tube('kitchen sink faucet', a, b, 0.018, M['int_steel'])
+
+    # Shelves in the unlabelled service enclosure are an inferred pantry fit-out.
+    for height in (0.35, 0.75, 1.15, 1.55, 1.95):
+        box('Interior | pantry shelving', (3.27, GARAGE_REAR_Y + 0.09, z + height),
+            (GARAGE_EXTENSION_X - 0.10, SERVICE_REAR_Y - 0.09, z + height + 0.024), M['int_trim'])
+    box('Interior | service vestibule bench', (0.23, 11.25, z + 0.39),
+        (0.65, 11.94, z + 0.44), M['int_wood'])
+
+    # Narrow powder room: vanity toward the entry, WC toward the stair landing.
+    cx = (STAIR_X0 + 0.075 + W - 0.205) / 2
+    va, vc = STAIR_X0 + half + 0.04, W - 0.23
+    vb, vd = FRONT + 0.24, FRONT + 0.76
+    vt = z + 0.85
+    box('Interior | powder vanity plinth', (va + 0.045, vb, z), (vc - 0.045, vd - 0.04, z + 0.10), M['int_dark'])
+    # Cabinet front and side walls leave the basin volume empty.
+    for a, b, c, d in ((va, vb, va + 0.03, vd), (vc - 0.03, vb, vc, vd),
+                        (va, vd - 0.03, vc, vd)):
+        box('Interior | powder vanity cabinet', (a, b, z + 0.10), (c, d, vt - 0.04), M['int_trim'])
+    sink = (cx - 0.22, vb + 0.10, cx + 0.22, vd - 0.075)
+    for a, b, c, d in ((va, vb, sink[0], vd), (sink[2], vb, vc, vd),
+                        (sink[0], vb, sink[2], sink[1]), (sink[0], sink[3], sink[2], vd)):
+        box('Interior | powder vanity stone rim', (a, b, vt - 0.035), (c, d, vt), M['int_counter'])
+    interior_basin('powder washbasin', sink, vt, 0.15, M['int_ceramic'])
+    interior_tube('powder faucet upright', (cx, vb + 0.045, vt),
+                  (cx, vb + 0.045, vt + 0.17), 0.018, M['int_steel'])
+    interior_tube('powder faucet spout', (cx, vb + 0.045, vt + 0.17),
+                  (cx, vb + 0.17, vt + 0.17), 0.018, M['int_steel'])
+    # Metallic mirror approximation remains a lit surface, not an emissive panel.
+    box('Interior | powder mirror frame', (va, FRONT + 0.212, z + 1.03),
+        (vc, FRONT + 0.235, z + 1.95), M['int_trim'])
+    box('Interior | powder mirror - metallic approximation', (va + 0.025, FRONT + 0.236, z + 1.055),
+        (vc - 0.025, FRONT + 0.242, z + 1.925), M['int_steel'])
+    toilet_y = POWDER_REAR_Y - 0.48
+    interior_oval('powder toilet pedestal', (cx, toilet_y, z),
+                  [(0.13, 0.21, 0), (0.14, 0.22, 0.16), (0.20, 0.28, 0.34)], M['int_ceramic'])
+    # A stepped oval depression creates a visibly open bowl and raised seat rim.
+    interior_oval('powder toilet bowl and seat', (cx, toilet_y - 0.025, z),
+                  [(0.16, 0.24, 0.27), (0.205, 0.295, 0.39), (0.21, 0.30, 0.43),
+                   (0.145, 0.225, 0.43), (0.10, 0.16, 0.31)], M['int_ceramic'])
+    box('Interior | powder toilet tank', (cx - 0.20, POWDER_REAR_Y - 0.25, z + 0.32),
+        (cx + 0.20, POWDER_REAR_Y - 0.085, z + 0.77), M['int_ceramic'], 0.025)
+    box('Interior | powder toilet tank lid', (cx - 0.21, POWDER_REAR_Y - 0.26, z + 0.77),
+        (cx + 0.21, POWDER_REAR_Y - 0.075, z + 0.80), M['int_ceramic'], 0.015)
+
+
+if BUILD_FIRST_FLOOR:
+    build_first_floor()
+
 # Selection, cameras, lighting, world and units are unchanged.
 # Standard/sRGB color management is configured above.
 bpy.context.view_layer.update()
-print('Honor FH-1 exterior created: %d mesh objects in %s.' % (len(COL.objects), COLLECTION_NAME))
+print('Honor FH-1 house created: %d mesh objects in %s.' % (len(COL.objects), COLLECTION_NAME))
 print('Front is -Y. Unseen elevations and roof dimensions are approximations.')
+if BUILD_FIRST_FLOOR:
+    print('First-floor interior added; mirrored with the right-hand garage: %s.' % RIGHT_HAND_GARAGE)
+    print('Includes rear garage bay, service/pantry rooms, leisure, foyer, powder, kitchen, cafe and great room.')
+    print('Stair flight and ceiling opening included; upper-floor room layout is deferred.')
+    print('All materials are lit. Interior finishes and stair details are inferred.')
+    print('Reload honor.py in Blender and rerun; re-export the GLB to update the web scene.')
