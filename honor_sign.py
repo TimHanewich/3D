@@ -225,8 +225,8 @@ for side in (-1, 1):
         (x + 0.045, 0.125, top + 0.08), WHITE)
     box('post cap %s' % side, (x - 0.057, 0.023, top + 0.075),
         (x + 0.057, 0.137, top + 0.11), DARK)
-box('small blue divider', (-w * 0.32, -0.052, bottom + h * 0.46),
-    (w * 0.32, -0.046, bottom + h * 0.46 + 0.008), ACCENT, 0.002)
+
+
 
 
 def lettering(name, body, center_z, max_width, max_height, mat):
