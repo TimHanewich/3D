@@ -71,8 +71,11 @@ REFERENCE / LIMITATIONS
   User shower-floor revision: modeled 2 x 2 inch tiles with recessed grout
   replace the insert pan. Gentle slopes meet a central drain grate; colors,
   grout width, slope and grate dimensions are inferred. Shower door stays closed.
-  Tray ceiling remains omitted. Refrigerator and laundry
-  appliances are optional and disabled; utility connections/HVAC are inferred.
+  User master bedroom ceiling revision: centered upward-recessed tray above
+  the main sleeping area; 12-inch rise is inferred; 3-foot border user specified.
+  Closet/entry ceilings and roof remain unchanged; cutaway hides the tray too.
+  Refrigerator and laundry appliances are optional and disabled;
+  utility connections/HVAC are inferred.
   SECOND_FLOOR_CUTAWAY omits main roof/soffits and upper ceiling for inspection;
   restore False and rerun before a complete-house export. No loose furniture
   or lights are added. Interior finishes and equipment details are inferred.
@@ -229,6 +232,12 @@ UP_MASTER_FRONT = 11.50
 UP_MASTER_CLOSET_X = 6.85
 UP_MASTER_CLOSET_END_X = W - 0.205
 UP_MASTER_CLOSET_REAR = UP_MASTER_FRONT + 0.72
+# User revision: central upward-recessed tray over the main sleeping area.
+# Border is user specified; rise is inferred; closet and entry remain flat.
+MASTER_CEILING_RECESS_RISE = 0.3048   # 12 inches above the existing ceiling
+MASTER_CEILING_BORDER = 0.9144        # 3-foot perimeter at the existing height
+assert MASTER_CEILING_RECESS_RISE > 0.10
+assert MASTER_CEILING_BORDER > 0.025
 # window_upstairs.png: master bedroom side window just rearward of the closet.
 # Built on X = W; mirrors to the left exterior wall with RIGHT_HAND_GARAGE.
 # Position inferred from the plan; size/sill match the existing master windows.
@@ -2296,8 +2305,46 @@ def build_second_floor():
     # The straight master/closet wall closes the rear of this opening. A second
     # rear guard would overlap that wall; leave the front stair arrival open.
     if BUILD_SECOND_FLOOR_CEILINGS and not SECOND_FLOOR_CUTAWAY:
-        box('Interior | Upper | flat 8 ft 8 in ceiling', (inset, front, SECOND_CEILING_Z),
-            (W - inset, rear, SECOND_CEILING_Z + 0.10), M['int_ceiling'])
+        # MASTER BEDROOM TRAY: remove the original ceiling inside the recess,
+        # rather than placing a raised panel above an unbroken flat slab.
+        # Center on the clear sleeping rectangle behind the reach-in closet.
+        border = MASTER_CEILING_BORDER
+        tx0 = sx + INTERIOR_WALL_T / 2 + border
+        tx1 = W - inset - border
+        ty0 = UP_MASTER_CLOSET_REAR + INTERIOR_WALL_T / 2 + border
+        ty1 = rear - border
+        tray_rect = (tx0, ty0, tx1, ty1)
+        raised_z = SECOND_CEILING_Z + MASTER_CEILING_RECESS_RISE
+        lining_t = 0.025
+        assert tx0 < tx1 and ty0 < ty1, 'Master ceiling border leaves no recess'
+        # Conservative clearance to the retained hipped roof deck at all
+        # corners of the raised panel, including its enclosing side lining.
+        roof_run = min(tx0 - lining_t + OVERHANG,
+                       W + OVERHANG - tx1 - lining_t,
+                       ty0 - lining_t - FRONT + OVERHANG,
+                       BACK + OVERHANG - ty1 - lining_t)
+        assert raised_z + 0.10 < ROOF_EAVE + roof_run * MAIN_PITCH - 0.10
+        ceiling = Geometry()
+        for a, b, c, d in subtract_rect((inset, front, W - inset, rear), tray_rect):
+            ceiling.box((a, b, SECOND_CEILING_Z), (c, d, SECOND_CEILING_Z + 0.10))
+        ceiling.finish('Interior | Upper | ceiling with master tray opening', M['int_ceiling'])
+        # The cut slab supplies the lowest 10 cm of the vertical reveal.
+        # Continue its four sides upward without intruding into the opening.
+        reveal = Geometry()
+        for a, b, c, d in ((tx0 - lining_t, ty0 - lining_t, tx0, ty1 + lining_t),
+                            (tx1, ty0 - lining_t, tx1 + lining_t, ty1 + lining_t),
+                            (tx0, ty0 - lining_t, tx1, ty0),
+                            (tx0, ty1, tx1, ty1 + lining_t)):
+            reveal.box((a, b, SECOND_CEILING_Z + 0.10), (c, d, raised_z))
+        reveal.finish('Interior | Upper | master tray vertical reveals', M['int_ceiling'])
+        tray = box('Interior | Upper | master bedroom raised tray ceiling',
+                   (tx0 - lining_t, ty0 - lining_t, raised_z),
+                   (tx1 + lining_t, ty1 + lining_t, raised_z + 0.10), M['int_ceiling'])
+        tray['room'] = 'Master bedroom'
+        tray['recess_rise_m'] = MASTER_CEILING_RECESS_RISE
+        tray['perimeter_border_m'] = border
+        COL['master_bedroom_ceiling'] = 'Centered upward-recessed tray; border and rise inferred'
+        COL['master_bedroom_center_ceiling_height_m'] = raised_z - z
     if BUILD_SECOND_FLOOR_FIXTURES:
         build_second_floor_fixtures()
     for obj in COL.objects:
@@ -2313,7 +2360,7 @@ def build_second_floor():
     COL['second_floor_limitations'] = ('Plan fitted to existing FH-1 shell; stair opening corrected '
                                       'to preserve the straight master/loft wall and reach-in closet. '
                                       'Finishes, fixture details and door sizes inferred. '
-                                      'Master bath upgrade follows masterbath.png; recessed ceiling not included.')
+                                      'Master bath upgrade follows masterbath.png; master bedroom tray ceiling added with inferred dimensions.')
 
 
 if BUILD_FIRST_FLOOR:
