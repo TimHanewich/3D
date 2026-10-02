@@ -36,6 +36,8 @@ REFERENCE / LIMITATIONS
   small partition offsets and the entry-door alignment are adjusted to fit.
   The brochure's rear 11'4\" x 13'1\" GARAGE bay remains part of the garage.
   Interior finishes, service-room labels, cabinets and stair details inferred.
+  User kitchen revision: over-range microwave with a matching upper cabinet
+  replaces the separate hood and flue. Appliance size and finish are inferred.
   Both floors have clear glazing and statically open room doors by default.
   User glazing revision: windows, sliders and shower glass use separate thin,
   double-sided alpha-blended panes for GLB / Three.js. Frames remain opaque.
@@ -1630,10 +1632,73 @@ def build_first_floor_fixtures():
         for y in (14.80, 15.16):
             interior_tube('cooktop burner', (x, y, counter_z), (x, y, counter_z + 0.008),
                           0.095, M['int_steel'], 24)
-    box('Interior | range hood canopy', (0.22, 14.59, z + 1.66),
-        (0.84, 15.39, z + 1.78), M['int_steel'], 0.006)
-    box('Interior | range hood flue', (0.23, 14.80, z + 1.78),
-        (0.48, 15.18, z + 2.32), M['int_steel'])
+    # User revision: over-the-range microwave and upper cabinet, not a hood.
+    # Generic appliance dimensions/finish fitted to the existing cabinet gap;
+    # this is a visual model, not a manufacturer's installation specification.
+    mw_y0, mw_y1 = 14.609, 15.371
+    mw_bottom, mw_top = z + 1.52, z + 1.94
+    cab_bottom, cab_top = z + 1.955, z + 2.32
+    assert 14.60 < mw_y0 < mw_y1 < 15.38
+    assert counter_z < mw_bottom < mw_top < cab_bottom < cab_top < INTERIOR_CEILING_Z
+    microwave = box('Interior | over-range microwave body',
+                    (0.23, mw_y0, mw_bottom), (0.65, mw_y1, mw_top),
+                    M['int_steel'], 0.005)
+    microwave['appliance'] = 'Over-the-range microwave; user requested'
+    microwave['dimension_note'] = 'Generic dimensions and stainless finish inferred'
+    box('Interior | microwave closed door surround',
+        (0.651, mw_y0 + 0.018, mw_bottom + 0.035),
+        (0.668, mw_y1 - 0.17, mw_top - 0.05), M['int_steel'], 0.003)
+    box('Interior | microwave dark door glass',
+        (0.669, mw_y0 + 0.045, mw_bottom + 0.065),
+        (0.674, mw_y1 - 0.225, mw_top - 0.08), M['int_dark'], 0.003)
+    beam('Interior | microwave vertical door handle',
+         (0.706, mw_y1 - 0.19, mw_bottom + 0.085),
+         (0.706, mw_y1 - 0.19, mw_top - 0.09), 0.023, 0.023, M['int_steel'])
+    for h in (mw_bottom + 0.085, mw_top - 0.09):
+        beam('Interior | microwave handle mount',
+             (0.668, mw_y1 - 0.19, h), (0.706, mw_y1 - 0.19, h),
+             0.016, 0.016, M['int_steel'])
+    box('Interior | microwave control panel',
+        (0.651, mw_y1 - 0.155, mw_bottom + 0.035),
+        (0.669, mw_y1 - 0.022, mw_top - 0.05), M['int_dark'])
+    box('Interior | microwave display - unlit',
+        (0.670, mw_y1 - 0.14, mw_top - 0.14),
+        (0.674, mw_y1 - 0.038, mw_top - 0.08), M['wood'])
+    keys = Geometry()
+    for row in range(4):
+        for col in range(3):
+            yy = mw_y1 - 0.137 + col * 0.034
+            zz = mw_bottom + 0.065 + row * 0.038
+            keys.box((0.670, yy, zz), (0.674, yy + 0.020, zz + 0.020))
+    keys.finish('Interior | microwave keypad', M['int_steel'])
+    box('Interior | microwave upper vent grille',
+        (0.651, mw_y0 + 0.025, mw_top - 0.035),
+        (0.659, mw_y1 - 0.025, mw_top - 0.018), M['int_dark'])
+    # Match the adjacent upper cabinets' depth, top elevation and white finish.
+    cabinet = Geometry()
+    cabinet.box((0.23, mw_y0, cab_bottom), (0.25, mw_y1, cab_top))
+    cabinet.box((0.25, mw_y0, cab_bottom), (0.57, mw_y0 + 0.02, cab_top))
+    cabinet.box((0.25, mw_y1 - 0.02, cab_bottom), (0.57, mw_y1, cab_top))
+    cabinet.box((0.25, mw_y0 + 0.02, cab_bottom), (0.57, mw_y1 - 0.02, cab_bottom + 0.02))
+    cabinet.box((0.25, mw_y0 + 0.02, cab_top - 0.02), (0.57, mw_y1 - 0.02, cab_top))
+    cabinet.finish('Interior | cabinet above microwave carcass', M['int_trim'], 0.002)
+    for k in range(2):
+        a = mw_y0 + (mw_y1 - mw_y0) * k / 2 + 0.006
+        b = mw_y0 + (mw_y1 - mw_y0) * (k + 1) / 2 - 0.006
+        low, high = cab_bottom + 0.006, cab_top - 0.006
+        door = Geometry()
+        door.box((0.571, a, low), (0.584, b, high))
+        for l, r in ((a, a + 0.04), (b - 0.04, b)):
+            door.box((0.584, l, low), (0.599, r, high))
+        for lo, hi in ((low, low + 0.04), (high - 0.04, high)):
+            door.box((0.584, a + 0.04, lo), (0.599, b - 0.04, hi))
+        door.finish('Interior | cabinet above microwave shaker door %d' % (k + 1),
+                    M['int_trim'], 0.001)
+        pull_y = b - 0.055 if k == 0 else a + 0.055
+        beam('Interior | cabinet above microwave pull',
+             (0.625, pull_y, cab_bottom + 0.07),
+             (0.625, pull_y, cab_bottom + 0.21), 0.014, 0.014, M['metal'])
+    COL['kitchen_over_range'] = 'Microwave with matching upper cabinet; no separate hood or flue'
 
     # Long island with working-side sink/dishwasher and an overhanging cafe side.
     # Sink cabinet is hollow at the top so geometry does not fill the bowls.
