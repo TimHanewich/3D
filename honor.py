@@ -62,7 +62,7 @@ REFERENCE / LIMITATIONS
   carpet, including upstairs bath/utility/closet floors. Shower/tub surfaces,
   garage, porch and lanai remain unchanged. No new roof or footprint.
   User masterbath.png upgrade: vanity moved to the HVAC wall, wider rear
-  shower with bench and hinged glass, rear WC with an added window, and an
+  shower with hinged glass and no bench, rear WC with an added window, and an
   L-shaped walk-in closet. Partitions, doors and floor masks revised together.
   Existing shower window recentered; prior guest double vanity and added side
   windows retained. Upgrade dimensions and opening heights are inferred.
@@ -1919,7 +1919,7 @@ def build_second_floor_fixtures():
                   f.p(1.40, 0.38, z + 1.97), 0.055, M['int_steel'])
 
     # Upgrade: wider rear shower, solid sides and a hinged glass front door.
-    # Bench and hardware dimensions are inferred from the small plan symbol.
+    # Hardware dimensions are inferred; the user confirmed no shower bench.
     sx0 = UP_BED_X + INTERIOR_WALL_T / 2 + 0.02
     sx1, sy0, sy1 = UP_SUITE_X - 0.08, UP_MASTER_SHOWER_FRONT, BACK - 0.24
     f = Facade('Interior | Upper | master shower', (sx0, sy0), (1, 0), (0, 1), sx1 - sx0)
@@ -1939,24 +1939,22 @@ def build_second_floor_fixtures():
     for a, low, b, high in subtract_rect((sx0, z + 0.08, sx1, z + 2.12), window_mask):
         box(f.name + ' rear tile around window', (a, BACK - 0.229, low),
             (b, BACK - 0.207, high), M['int_tile'])
-    box(f.name + ' built-in bench base', (sx1 - 0.34, sy0 + 0.05, z + 0.04),
-        (sx1, sy1 - 0.04, z + 0.43), M['int_tile'])
-    box(f.name + ' bench stone seat', (sx1 - 0.35, sy0 + 0.04, z + 0.43),
-        (sx1, sy1 - 0.03, z + 0.46), M['int_counter'], 0.003)
+    # User revision: no shower bench; retain the full unobstructed pan.
     door_width = 0.78
     hinge_x = sx0 + door_width
-    assert hinge_x + 0.10 < sx1 - 0.35, 'Shower door conflicts with bench'
+    assert hinge_x + 0.10 < sx1, 'Shower door leaves too little fixed glass'
     glass_panel(f.name + ' fixed front glass',
                 [(hinge_x, sy0, z + 0.10), (sx1, sy0, z + 0.10),
                  (sx1, sy0, z + 2.04), (hinge_x, sy0, z + 2.04)])
     hinge = Vector((hinge_x, sy0, z + 0.10))
-    along = Vector((0, -1, 0) if SECOND_FLOOR_OPEN_DOORS else (-1, 0, 0))
+    # User revision: shower door stays closed independently of room doors.
+    along = Vector((-1, 0, 0))
     end = hinge + along * door_width
     door = glass_panel(f.name + ' hinged glass door',
                        [hinge, end, end + Vector((0, 0, 1.94)),
                         hinge + Vector((0, 0, 1.94))])
-    door['open_angle_degrees'] = 90 if SECOND_FLOOR_OPEN_DOORS else 0
-    door['reference'] = 'masterbath.png; glass door opening toward bathroom'
+    door['open_angle_degrees'] = 0
+    door['reference'] = 'masterbath.png; glass door closed per user request'
     for h in (z + 0.10, z + 2.04):
         beam(f.name + ' fixed glass edge', (hinge_x, sy0, h), (sx1, sy0, h),
              0.016, 0.016, M['int_steel'])
@@ -1966,7 +1964,7 @@ def build_second_floor_fixtures():
     pull = hinge + along * (door_width - 0.08) + side * 0.025
     beam(f.name + ' door pull', (pull.x, pull.y, z + 0.95),
          (pull.x, pull.y, z + 1.17), 0.016, 0.016, M['int_steel'])
-    # Mixer/head on the WC-side wall, away from the bench and rear window.
+    # Mixer/head on the WC-side wall, clear of the rear window.
     shower_y = (sy0 + sy1) / 2
     interior_tube('Upper | master shower mixer', (sx0 + 0.005, shower_y, z + 1.10),
                   (sx0 + 0.035, shower_y, z + 1.10), 0.045, M['int_steel'])
