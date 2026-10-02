@@ -1860,7 +1860,14 @@ def build_second_floor_fixtures():
     z = SECOND_FLOOR_Z
     # Standard plan: rear double vanity, shower, separate WC, walk-in closet.
     upper_vanity('master double vanity', (4.00, BACK - 0.24), (-1, 0), 1.90, 2)
-    upper_vanity('bath 2 vanity', (UP_BATH2_X - 0.09, 8.36), (0, 1), 0.80)
+    # doublevanity.png: two sinks along the guest-bath wall beside the loft.
+    # Extend toward the entry wall; retain the toilet/tub and existing depth.
+    # Compact length fitted to this model, not a dimension from the plan.
+    bath2_vanity_y = 8.36
+    bath2_vanity_length = UP_BED2_REAR - 0.09 - bath2_vanity_y
+    assert bath2_vanity_length / 2 > 0.54, 'Guest vanity too short for two basins'
+    upper_vanity('bath 2 double vanity', (UP_BATH2_X - 0.09, bath2_vanity_y),
+                 (0, 1), bath2_vanity_length, sinks=2)
     upper_toilet('master WC', (UP_SUITE_X - 0.13, 14.48), (0, 1))
     upper_toilet('bath 2 WC', (UP_BATH2_X - 0.12, 7.90), (0, 1))
 
