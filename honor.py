@@ -66,6 +66,9 @@ REFERENCE / LIMITATIONS
   L-shaped walk-in closet. Partitions, doors and floor masks revised together.
   Existing shower window recentered; prior guest double vanity and added side
   windows retained. Upgrade dimensions and opening heights are inferred.
+  User shower-floor revision: modeled 2 x 2 inch tiles with recessed grout
+  replace the insert pan. Gentle slopes meet a central drain grate; colors,
+  grout width, slope and grate dimensions are inferred. Shower door stays closed.
   Tray ceiling remains omitted. Refrigerator and laundry
   appliances are optional and disabled; utility connections/HVAC are inferred.
   SECOND_FLOOR_CUTAWAY omits main roof/soffits and upper ceiling for inspection;
@@ -1883,6 +1886,84 @@ def upper_shelf(name, rect, rod_a, rod_b):
                   (rod_b[0], rod_b[1], z + 1.64), 0.017, M['int_steel'])
 
 
+def build_master_shower_tile_floor(name, rect, floor_z):
+    """Modeled 2-inch mosaics over recessed grout, not a molded insert.
+
+    Four gently sloping planes meet a central square drain. Joint width,
+    slope and drain details are visual placeholders, not construction specs.
+    Tiles are batched into one mesh and mirror with the rest of the house.
+    """
+    x0, y0, x1, y1 = rect
+    tile_size = 2 * 0.0254       # Actual full tile side: 2 inches / 50.8 mm
+    joint = 0.003175            # Inferred 1/8-inch grout joints
+    pitch = tile_size + joint
+    thickness, grout_recess = 0.008, 0.0015
+    edge_z, drain_z = floor_z + 0.075, floor_z + 0.060
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    drain_half = 0.0508         # Inferred 4-inch square grate; center retained
+    dx0, dy0, dx1, dy1 = cx - drain_half, cy - drain_half, cx + drain_half, cy + drain_half
+    assert x0 < dx0 < dx1 < x1 and y0 < dy0 < dy1 < y1
+    assert 0 < grout_recess < thickness and 0 < joint < tile_size
+    drop = edge_z - drain_z
+    # CCW trapezoids exclude the drain. Height = drain_z + slope *
+    # distance from its edge; each outside edge stays at edge_z.
+    slopes = [
+        ([(x0, y0), (x1, y0), (dx1, dy0), (dx0, dy0)],
+         0.0, -drop / (dy0 - y0), dx0, dy0),
+        ([(x1, y0), (x1, y1), (dx1, dy1), (dx1, dy0)],
+         drop / (x1 - dx1), 0.0, dx1, dy0),
+        ([(x1, y1), (x0, y1), (dx0, dy1), (dx1, dy1)],
+         0.0, drop / (y1 - dy1), dx0, dy1),
+        ([(x0, y1), (x0, y0), (dx0, dy0), (dx0, dy1)],
+         -drop / (dx0 - x0), 0.0, dx0, dy0),
+    ]
+    grout, tiles = Geometry(), Geometry()
+    nx, ny = math.ceil((x1 - x0) / pitch), math.ceil((y1 - y0) / pitch)
+    start_x, start_y = cx - nx * pitch / 2, cy - ny * pitch / 2
+    for boundary, ax, ay, ox, oy in slopes:
+        def height(x, y):
+            return drain_z + ax * (x - ox) + ay * (y - oy)
+        grout.prism([(x, y, height(x, y) - grout_recess) for x, y in boundary],
+                    (0, 0, -0.025))
+        for ix in range(nx):
+            left = start_x + ix * pitch + joint / 2
+            for iy in range(ny):
+                front = start_y + iy * pitch + joint / 2
+                polygon = clip_polygon([(left, front), (left + tile_size, front),
+                                        (left + tile_size, front + tile_size),
+                                        (left, front + tile_size)], boundary)
+                if len(polygon) < 3:
+                    continue
+                area = abs(sum(polygon[i][0] * polygon[(i + 1) % len(polygon)][1]
+                               - polygon[(i + 1) % len(polygon)][0] * polygon[i][1]
+                               for i in range(len(polygon)))) / 2
+                if area > 1e-9:
+                    tiles.prism([(x, y, height(x, y)) for x, y in polygon],
+                                (0, 0, -thickness))
+    grout.finish(name + ' | recessed grout and setting bed', M['int_grout'])
+    obj = tiles.finish(name + ' | individual 2 x 2 inch floor tiles', M['int_tile'])
+    obj['tile_side_m'] = tile_size
+    obj['grout_joint_m'] = joint
+    obj['walkable'] = True
+    obj['finish'] = '2 x 2 inch mosaic tiles with recessed grout; no insert pan'
+    obj['finish_note'] = 'Tile size user specified; colors, joints, slope and grate inferred'
+    # Real gaps between grate bars expose a dark recess, not tile underneath.
+    box(name + ' | drain recess', (dx0, dy0, drain_z - 0.013),
+        (dx1, dy1, drain_z - 0.008), M['int_dark'])
+    grate = Geometry()
+    rim = 0.008
+    for a, b, c, d in ((dx0, dy0, dx0 + rim, dy1), (dx1 - rim, dy0, dx1, dy1),
+                        (dx0 + rim, dy0, dx1 - rim, dy0 + rim),
+                        (dx0 + rim, dy1 - rim, dx1 - rim, dy1)):
+        grate.box((a, b, drain_z - 0.006), (c, d, drain_z))
+    for i in range(1, 8):
+        x = dx0 + rim + (dx1 - dx0 - 2 * rim) * i / 8
+        grate.box((x - 0.0015, dy0 + rim, drain_z - 0.006),
+                  (x + 0.0015, dy1 - rim, drain_z))
+    grate.finish(name + ' | central drain grate', M['int_steel'])
+    COL['master_shower_floor'] = '2 x 2 inch modeled tiles with recessed grout; no insert pan'
+
+
 def build_second_floor_fixtures():
     z = SECOND_FLOOR_Z
     # masterbath.png upgrade: double vanity on the wall shared with HVAC.
@@ -1923,8 +2004,7 @@ def build_second_floor_fixtures():
     sx0 = UP_BED_X + INTERIOR_WALL_T / 2 + 0.02
     sx1, sy0, sy1 = UP_SUITE_X - 0.08, UP_MASTER_SHOWER_FRONT, BACK - 0.24
     f = Facade('Interior | Upper | master shower', (sx0, sy0), (1, 0), (0, 1), sx1 - sx0)
-    upper_basin('master shower pan', f, (0, 0, sx1 - sx0, sy1 - sy0),
-                z + 0.075, 0.045, M['int_ceramic'])
+    build_master_shower_tile_floor(f.name, (sx0, sy0, sx1, sy1), z)
     box(f.name + ' front curb', (sx0, sy0 - 0.035, z),
         (sx1, sy0 + 0.035, z + 0.09), M['int_counter'])
     for a, b in ((sx0 - 0.02, sx0), (sx1, sx1 + 0.014)):
@@ -1939,7 +2019,7 @@ def build_second_floor_fixtures():
     for a, low, b, high in subtract_rect((sx0, z + 0.08, sx1, z + 2.12), window_mask):
         box(f.name + ' rear tile around window', (a, BACK - 0.229, low),
             (b, BACK - 0.207, high), M['int_tile'])
-    # User revision: no shower bench; retain the full unobstructed pan.
+    # User revision: no shower bench; retain the unobstructed tiled floor.
     door_width = 0.78
     hinge_x = sx0 + door_width
     assert hinge_x + 0.10 < sx1, 'Shower door leaves too little fixed glass'
