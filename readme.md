@@ -8,7 +8,4 @@
 ## To Change
 - Master bath upgrade
 - Hood above range should be microsoft
-- Double vanity in guest bath
-- Window at foot of stairs
-- Optional window in master bedroom
 - Recessed ceiling in master bedroom
