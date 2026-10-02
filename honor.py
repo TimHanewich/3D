@@ -24,7 +24,9 @@ REFERENCE / LIMITATIONS
   Dimensions, details and paint assignments are preserved; no negative scales.
   Set RIGHT_HAND_GARAGE = False to restore the brochure's left-hand layout.
   Side/rear finishes and lanai roof are inferred, not documented elevations.
-  Optional lanai extension and optional ground stair window are NOT included.
+  Optional lanai extension is NOT included. User window.png revision adds a
+  ground-floor side window just beyond the foot of the stairs; opening width,
+  sill height and head height are inferred, not dimensioned in the supplied plan.
   First-floor increment: den, foyer, powder bath, kitchen, cafe, great room,
   service vestibule/pantry, rear garage extension and straight stair flight.
   den.png revision encloses the former leisure room with a solid rear wall
@@ -148,6 +150,19 @@ assert 0.10 < DEN_DOOR_WIDTH / 2 - 0.027
 assert DEN_DOOR_HEIGHT < INTERIOR_CEILING_Z - INTERIOR_FLOOR_Z
 STAIR_X0, STAIR_X1 = 8.82, W - 0.205
 STAIR_Y0, STAIR_Y1 = 7.55, 12.07  # upper/front arrival to lower/rear foot, traced from plan
+# window.png: first-floor side window just beyond the lower/rear stair foot.
+# X = W in the brochure frame; the house-wide mirror puts it on the left.
+# Opening dimensions and sill height are inferred from the supplied plan.
+STAIR_WINDOW_WIDTH = 1.00
+STAIR_WINDOW_FRONT_GAP = 0.30
+STAIR_WINDOW_Y = STAIR_Y1 + STAIR_WINDOW_FRONT_GAP + STAIR_WINDOW_WIDTH / 2
+STAIR_WINDOW_SILL_Z = INTERIOR_FLOOR_Z + 0.60
+STAIR_WINDOW_HEIGHT = 1.52
+assert STAIR_WINDOW_WIDTH > 0 and STAIR_WINDOW_HEIGHT > 0
+assert STAIR_WINDOW_FRONT_GAP > 0.115
+assert STAIR_WINDOW_Y + STAIR_WINDOW_WIDTH / 2 + 0.115 < BACK - 0.205
+assert INTERIOR_FLOOR_Z + 0.10 < STAIR_WINDOW_SILL_Z - 0.065
+assert STAIR_WINDOW_SILL_Z + STAIR_WINDOW_HEIGHT + 0.095 < INTERIOR_CEILING_Z
 STAIR_RISERS = 18               # Inferred vertical fit; not a construction specification
 STAIR_SOFFIT_THICKNESS = 0.12
 # User revision: carpeted stairs and solid drywall instead of open balusters.
@@ -964,7 +979,11 @@ wall(entry, FF, UPPER_FLOOR,
      [opening('den window', 0.93, 0.92, FF + 0.58, 1.52),
       opening('front entrance', entry_center_x - GARAGE_W, 0.965, FF, 2.44, 'entry')], lap=True)
 wall(Facade('Left main lower', (0, FRONT), (0, 1), (-1, 0), BACK - FRONT), FF, UPPER_FLOOR)
-wall(Facade('Right main lower', (W, FRONT), (0, 1), (1, 0), BACK - FRONT), FF, UPPER_FLOOR)
+# Facade coordinates start at FRONT; wall() cuts both shell and interior lining
+# and builds matching casing, sash and separate transparent glazing panes.
+wall(Facade('Right main lower', (W, FRONT), (0, 1), (1, 0), BACK - FRONT), FF, UPPER_FLOOR,
+     [opening('stair foot window', STAIR_WINDOW_Y - FRONT, STAIR_WINDOW_WIDTH,
+              STAIR_WINDOW_SILL_Z, STAIR_WINDOW_HEIGHT)])
 rear_lower = Facade('Rear ground floor', (0, BACK), (1, 0), (0, 1), W)
 wall(rear_lower, FF, UPPER_FLOOR,
      [opening('lanai sliding doors', 2.36, 2.74, FF + 0.025, 2.37, 'slider'),
