@@ -1700,8 +1700,10 @@ def build_first_floor_fixtures():
              (0.625, pull_y, cab_bottom + 0.21), 0.014, 0.014, M['metal'])
     COL['kitchen_over_range'] = 'Microwave with matching upper cabinet; no separate hood or flue'
 
-    # Long island with working-side sink/dishwasher and an overhanging cafe side.
-    # Sink cabinet is hollow at the top so geometry does not fill the bowls.
+    # FARMHOUSE SINK REVISION: one white apron-front basin, no divider.
+    # Dimensions and ceramic finish inferred; island and faucet retained.
+    sink_rect = (1.92, 14.12, 2.82, 15.00)
+    sink_bottom = counter_z - 0.25
     box('Interior | island plinth', (2.08, 13.30, z), (3.30, 15.72, z + 0.10), M['int_dark'])
     island = Geometry()
     island.box((2.00, 13.25, z + 0.10), (3.35, 15.77, z + 0.15))
@@ -1709,27 +1711,54 @@ def build_first_floor_fixtures():
     for a, b in ((13.25, 13.30), (15.72, 15.77)):
         island.box((2.00, a, z + 0.15), (3.35, b, counter_z - 0.04))
     island.finish('Interior | island hollow cabinet carcass', M['int_trim'])
-    for a, b in ((13.28, 13.99), (14.02, 14.83), (14.86, 15.73)):
+    for a, b in ((13.28, 13.99), (14.02, 14.55), (14.58, 15.01), (15.04, 15.73)):
+        under_sink = a < sink_rect[3] and b > sink_rect[1]
+        door_top = sink_bottom - 0.02 if under_sink else counter_z - 0.05
+        pull_z = door_top - 0.10
         box('Interior | island working-side door', (1.98, a, z + 0.12),
-            (2.01, b, counter_z - 0.05), M['int_trim'])
-        beam('Interior | island cabinet pull', (1.95, (a + b) / 2 - 0.08, z + 0.71),
-             (1.95, (a + b) / 2 + 0.08, z + 0.71), 0.015, 0.015, M['metal'])
+            (2.01, b, door_top), M['int_trim'])
+        beam('Interior | island cabinet pull', (1.95, (a + b) / 2 - 0.08, pull_z),
+             (1.95, (a + b) / 2 + 0.08, pull_z), 0.015, 0.015, M['metal'])
     box('Interior | integrated dishwasher front', (1.958, 13.35, z + 0.12),
         (1.977, 13.96, counter_z - 0.065), M['int_steel'])
     beam('Interior | dishwasher pull', (1.92, 13.42, counter_z - 0.13),
          (1.92, 13.89, counter_z - 0.13), 0.022, 0.022, M['int_steel'])
-    # Four counter strips form a genuine hole around the double sink.
-    for i, (a, b, c, d) in enumerate(((1.95, 13.20, 2.14, 15.82),
-                                      (2.82, 13.20, 3.58, 15.82),
-                                      (2.14, 13.20, 2.82, 14.12),
-                                      (2.14, 15.00, 2.82, 15.82))):
-        box('Interior | island stone countertop segment %d' % i, (a, b, counter_z - 0.04),
-            (c, d, counter_z), M['int_counter'], 0.002)
-    for i, (a, b) in enumerate(((14.12, 14.55), (14.57, 15.00))):
-        interior_basin('kitchen sink bowl %d' % i, (2.14, a, 2.82, b),
-                       counter_z, 0.19, M['int_steel'])
-    box('Interior | sink center divider', (2.14, 14.55, counter_z - 0.19),
-        (2.82, 14.57, counter_z), M['int_steel'])
+    # Counter notch exposes the apron on the working side of the island.
+    for i, (a, b, c, d) in enumerate(subtract_rect((1.95, 13.20, 3.58, 15.82), sink_rect)):
+        box('Interior | island stone countertop segment %d' % i,
+            (a, b, counter_z - 0.04), (c, d, counter_z), M['int_counter'], 0.002)
+
+    # One connected shell, open above its continuous recessed floor.
+    a, b, c, d = sink_rect
+    wall_t = 0.035
+    basin_floor = sink_bottom + 0.025
+    rings = [
+        [(a, b, sink_bottom), (c, b, sink_bottom),
+         (c, d, sink_bottom), (a, d, sink_bottom)],
+        [(a, b, counter_z), (c, b, counter_z),
+         (c, d, counter_z), (a, d, counter_z)],
+        [(a + wall_t, b + wall_t, counter_z), (c - wall_t, b + wall_t, counter_z),
+         (c - wall_t, d - wall_t, counter_z), (a + wall_t, d - wall_t, counter_z)],
+        [(a + 0.06, b + 0.06, basin_floor), (c - 0.06, b + 0.06, basin_floor),
+         (c - 0.06, d - 0.06, basin_floor), (a + 0.06, d - 0.06, basin_floor)],
+    ]
+    sink = Geometry()
+    sink.vertices.extend(point for ring in rings for point in ring)
+    sink.faces.append((3, 2, 1, 0))
+    for lower in (0, 4, 8):
+        for i in range(4):
+            j = (i + 1) % 4
+            sink.faces.append((lower + i, lower + j, lower + 4 + j, lower + 4 + i))
+    sink.faces.append((12, 13, 14, 15))
+    sink.indices.extend([0] * len(sink.faces))
+    sink_obj = sink.finish('Interior | kitchen farmhouse single-basin apron sink',
+                           M['int_ceramic'], 0.006)
+    sink_obj['basin_count'] = 1
+    interior_tube('kitchen farmhouse sink drain',
+                  ((a + c) / 2, (b + d) / 2, basin_floor),
+                  ((a + c) / 2, (b + d) / 2, basin_floor + 0.003),
+                  0.035, M['int_steel'])
+    COL['kitchen_sink'] = 'White farmhouse apron-front sink; one basin, no divider'
     for a, b in (((2.87, 14.56, counter_z), (2.87, 14.56, counter_z + 0.29)),
                  ((2.87, 14.56, counter_z + 0.29), (2.58, 14.56, counter_z + 0.29)),
                  ((2.58, 14.56, counter_z + 0.29), (2.58, 14.56, counter_z + 0.23))):
