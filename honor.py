@@ -1702,7 +1702,8 @@ def build_first_floor_fixtures():
 
     # FARMHOUSE SINK REVISION: one white apron-front basin, no divider.
     # Dimensions and ceramic finish inferred; island and faucet retained.
-    sink_rect = (1.92, 14.12, 2.82, 15.00)
+    # Shorter front-to-back footprint; apron stays at the working-side edge.
+    sink_rect = (1.92, 14.12, 2.48, 15.00)
     sink_bottom = counter_z - 0.25
     box('Interior | island plinth', (2.08, 13.30, z), (3.30, 15.72, z + 0.10), M['int_dark'])
     island = Geometry()
@@ -1759,9 +1760,12 @@ def build_first_floor_fixtures():
                   ((a + c) / 2, (b + d) / 2, basin_floor + 0.003),
                   0.035, M['int_steel'])
     COL['kitchen_sink'] = 'White farmhouse apron-front sink; one basin, no divider'
-    for a, b in (((2.87, 14.56, counter_z), (2.87, 14.56, counter_z + 0.29)),
-                 ((2.87, 14.56, counter_z + 0.29), (2.58, 14.56, counter_z + 0.29)),
-                 ((2.58, 14.56, counter_z + 0.29), (2.58, 14.56, counter_z + 0.23))):
+    # Keep the faucet just behind the resized basin, with its spout over it.
+    faucet_x = sink_rect[2] + 0.05
+    spout_x = faucet_x - 0.29
+    for a, b in (((faucet_x, 14.56, counter_z), (faucet_x, 14.56, counter_z + 0.29)),
+                 ((faucet_x, 14.56, counter_z + 0.29), (spout_x, 14.56, counter_z + 0.29)),
+                 ((spout_x, 14.56, counter_z + 0.29), (spout_x, 14.56, counter_z + 0.23))):
         interior_tube('kitchen sink faucet', a, b, 0.018, M['int_steel'])
 
     # Shelves in the unlabelled service enclosure are an inferred pantry fit-out.
