@@ -43,7 +43,7 @@ REFERENCE / LIMITATIONS
   Export full materials (not placeholders) and keep glass separate from frames.
   Transparent sorting can still show artifacts with overlapping panes; inspect
   the exported GLB from both inside and outside in the target Three.js viewer.
-  Upper floor: master bedroom, standard master bath and separate WC, walk-in
+  Upper floor: master bedroom, upgraded master bath and separate WC, walk-in
   and reach-in closets, bedrooms 2/3 with closets, bath 2, utility, HVAC and loft.
   Upper ceiling is 8'8\" above its finished floor. All partitions, doors, floors,
   trim and fixtures mirror together with the retained FH-1 exterior openings.
@@ -61,7 +61,12 @@ REFERENCE / LIMITATIONS
   downstairs indoor rooms; all upstairs room floors and stairs use matching
   carpet, including upstairs bath/utility/closet floors. Shower/tub surfaces,
   garage, porch and lanai remain unchanged. No new roof or footprint.
-  Optional master bath and tray ceiling are omitted. Refrigerator and laundry
+  User masterbath.png upgrade: vanity moved to the HVAC wall, wider rear
+  shower with bench and hinged glass, rear WC with an added window, and an
+  L-shaped walk-in closet. Partitions, doors and floor masks revised together.
+  Existing shower window recentered; prior guest double vanity and added side
+  windows retained. Upgrade dimensions and opening heights are inferred.
+  Tray ceiling remains omitted. Refrigerator and laundry
   appliances are optional and disabled; utility connections/HVAC are inferred.
   SECOND_FLOOR_CUTAWAY omits main roof/soffits and upper ceiling for inspection;
   restore False and rerun before a complete-house export. No loose furniture
@@ -192,7 +197,7 @@ SECOND_CEILING_Z = SECOND_FLOOR_Z + (8 + 8 / 12) * 0.3048
 # This keeps the master/loft boundary straight, as drawn in the main plan.
 STAIR_HOLE = (STAIR_X0 - 0.04, STAIR_Y0, STAIR_X1 + 0.02, 11.39)
 STAIR_LANDING = (STAIR_X0, STAIR_Y0 - 0.90, STAIR_X1, STAIR_Y0)
-# Traced main upper plan, not the optional master-bath inset. These centerlines
+# Main upper plan with the user's masterbath.png upgrade. These centerlines
 # are fitted to the FH-1 shell; they are not exact brochure room dimensions.
 UP_BED_X = 3.60
 UP_SUITE_X = 5.64
@@ -204,8 +209,16 @@ UP_HALL_REAR = 10.82
 UP_UTILITY_REAR = 12.85
 UP_HVAC_REAR = 13.95
 UP_BED3_REAR = 14.60
-UP_WC_REAR = 14.98
-UP_WIC_X = 2.02
+# masterbath.png upgrade: rear WC beside the widened rear shower.
+# Coordinates remain in the unmirrored brochure frame; dimensions inferred.
+UP_MASTER_WC_FRONT = 15.95
+UP_MASTER_WC_X = 1.65
+UP_MASTER_SHOWER_FRONT = UP_MASTER_WC_FRONT
+UP_MASTER_SHOWER_WINDOW_X = (UP_BED_X + UP_SUITE_X) / 2
+UP_MASTER_WC_WINDOW_X = (UP_MASTER_WC_X + UP_BED_X) / 2
+UP_MASTER_BATH_WINDOW_Z = 5.07
+UP_MASTER_BATH_WINDOW_H = 0.69
+UP_WIC_X = 2.55                 # Upgrade: closet entry jogs around the rear WC
 UP_REACHIN_X = 2.42
 UP_MASTER_FRONT = 11.50
 UP_MASTER_CLOSET_X = 6.85
@@ -230,7 +243,15 @@ assert UP_BED_X < UP_BATH2_X < UP_SUITE_X < UP_MASTER_CLOSET_X < UP_MASTER_CLOSE
 assert FRONT + 0.205 < STAIR_LANDING[1] < STAIR_HOLE[1] < STAIR_HOLE[3] < BACK - 0.205
 assert STAIR_HOLE[3] + INTERIOR_WALL_T / 2 < UP_MASTER_FRONT
 assert STAIR_Y0 < POWDER_REAR_Y < STAIR_HOLE[3] < STAIR_Y1
-assert UP_MASTER_CLOSET_REAR < UP_BED3_REAR < UP_WC_REAR < BACK - 0.205
+assert UP_MASTER_CLOSET_REAR < UP_BED3_REAR < UP_MASTER_WC_FRONT < BACK - 0.205
+assert 0.205 < UP_MASTER_WC_X < UP_WIC_X < UP_BED_X < UP_SUITE_X
+assert UP_HVAC_REAR + 0.09 + 0.59 < 14.90  # Vanity ends before bedroom doorway
+assert 14.90 + 0.80 + 0.06 < UP_MASTER_SHOWER_FRONT
+assert UP_MASTER_WC_X + 0.96 + 0.82 < UP_BED_X - 0.06
+assert UP_BED3_REAR + 0.46 + 0.78 < UP_MASTER_WC_FRONT - 0.06
+assert UP_MASTER_WC_FRONT + INTERIOR_WALL_T / 2 + 0.025 + 0.766 < BACK - 0.205
+assert UP_MASTER_BATH_WINDOW_Z > SECOND_FLOOR_Z + 0.10
+assert UP_MASTER_BATH_WINDOW_Z + UP_MASTER_BATH_WINDOW_H + 0.095 < SECOND_CEILING_Z
 
 
 def stair_underside_z(y):
@@ -282,7 +303,10 @@ COL['units'] = 'Geometry is in meters; scene unit settings are not modified'
 COL['accuracy_note'] = 'Roof pitches and unseen elevations are inferred, not surveyed'
 COL['garage_side_from_street'] = 'right' if RIGHT_HAND_GARAGE else 'left'
 COL['floor_plan_reference_image'] = PLAN_REFERENCE_IMAGE
-COL['floor_plan_variant'] = 'Main C-1 plan; prior FH-1 exterior, mirror and den customization retained'
+COL['floor_plan_variant'] = 'C-1 with masterbath.png upgrade; FH-1 exterior, mirror and prior customizations retained'
+COL['master_bath_reference_image'] = r'C:\Users\timh\Downloads\masterbath.png'
+COL['master_bath_upgrade'] = 'HVAC-wall double vanity; wider rear shower; rear WC and extra window; L-shaped closet'
+COL['master_bath_dimension_note'] = 'Fitted to the existing shell from supplied plan; dimensions and fixture details inferred'
 # Published areas are source annotations, not measurements of this fitted mesh.
 for area_name, sqft in (('first_floor', 1017), ('second_floor', 1126),
                          ('living', 2143), ('garage', 566), ('lanai', 131),
@@ -1015,7 +1039,10 @@ wall(Facade('Upper right', (W, FRONT), (0, 1), (1, 0), BACK - FRONT), UPPER_FLOO
               MASTER_SIDE_WINDOW_WIDTH, MASTER_SIDE_WINDOW_SILL_Z,
               MASTER_SIDE_WINDOW_HEIGHT)], lap=True)
 wall(Facade('Upper rear', (0, BACK), (1, 0), (0, 1), W), UPPER_FLOOR, UPPER_EAVE,
-     [opening('bath rear', 4.80, 0.91, 5.07, 0.69),
+     [opening('master shower rear', UP_MASTER_SHOWER_WINDOW_X, 0.91,
+              UP_MASTER_BATH_WINDOW_Z, UP_MASTER_BATH_WINDOW_H),
+      opening('master WC rear', UP_MASTER_WC_WINDOW_X, 0.69,
+              UP_MASTER_BATH_WINDOW_Z, UP_MASTER_BATH_WINDOW_H),
       opening('master rear left', 6.48, 0.94, 4.23, 1.68),
       opening('master rear right', 9.08, 0.94, 4.23, 1.68)], lap=True)
 
@@ -1858,8 +1885,9 @@ def upper_shelf(name, rect, rod_a, rod_b):
 
 def build_second_floor_fixtures():
     z = SECOND_FLOOR_Z
-    # Standard plan: rear double vanity, shower, separate WC, walk-in closet.
-    upper_vanity('master double vanity', (4.00, BACK - 0.24), (-1, 0), 1.90, 2)
+    # masterbath.png upgrade: double vanity on the wall shared with HVAC.
+    upper_vanity('master double vanity', (UP_BED_X + 0.09, UP_HVAC_REAR + 0.09),
+                 (1, 0), UP_SUITE_X - UP_BED_X - 0.18, sinks=2)
     # doublevanity.png: two sinks along the guest-bath wall beside the loft.
     # Extend toward the entry wall; retain the toilet/tub and existing depth.
     # Compact length fitted to this model, not a dimension from the plan.
@@ -1868,7 +1896,9 @@ def build_second_floor_fixtures():
     assert bath2_vanity_length / 2 > 0.54, 'Guest vanity too short for two basins'
     upper_vanity('bath 2 double vanity', (UP_BATH2_X - 0.09, bath2_vanity_y),
                  (0, 1), bath2_vanity_length, sinks=2)
-    upper_toilet('master WC', (UP_SUITE_X - 0.13, 14.48), (0, 1))
+    # Tank backs onto the closet partition; bowl faces the shower side.
+    upper_toilet('master WC', (UP_MASTER_WC_X + 0.10,
+                               (UP_MASTER_WC_FRONT + BACK - 0.205) / 2), (0, -1))
     upper_toilet('bath 2 WC', (UP_BATH2_X - 0.12, 7.90), (0, 1))
 
     # Real recessed tub, rather than a solid block occupying its bathing space.
@@ -1888,38 +1918,60 @@ def build_second_floor_fixtures():
     interior_tube('Upper | bath 2 shower head', f.p(1.54, 0.38, z + 1.97),
                   f.p(1.40, 0.38, z + 1.97), 0.055, M['int_steel'])
 
-    # Keep the existing rear bath window unobstructed by full-height tile.
-    sx0, sx1, sy0, sy1 = 4.10, UP_SUITE_X - 0.08, 15.93, BACK - 0.24
+    # Upgrade: wider rear shower, solid sides and a hinged glass front door.
+    # Bench and hardware dimensions are inferred from the small plan symbol.
+    sx0 = UP_BED_X + INTERIOR_WALL_T / 2 + 0.02
+    sx1, sy0, sy1 = UP_SUITE_X - 0.08, UP_MASTER_SHOWER_FRONT, BACK - 0.24
     f = Facade('Interior | Upper | master shower', (sx0, sy0), (1, 0), (0, 1), sx1 - sx0)
     upper_basin('master shower pan', f, (0, 0, sx1 - sx0, sy1 - sy0),
                 z + 0.075, 0.045, M['int_ceramic'])
     box(f.name + ' front curb', (sx0, sy0 - 0.035, z),
         (sx1, sy0 + 0.035, z + 0.09), M['int_counter'])
-    glass_panel(f.name + ' side glass',
-                [(sx0 - 0.009, sy0, z + 0.09), (sx0 - 0.009, sy1, z + 0.09),
-                 (sx0 - 0.009, sy1, z + 2.06), (sx0 - 0.009, sy0, z + 2.06)])
-    span = sx1 - sx0
-    for k in range(2):
-        left = sx0 + 0.018
-        if k and not SECOND_FLOOR_OPEN_DOORS:
-            left = sx0 + span / 2 - 0.018
-        yy = sy0 + 0.016 * k
-        glass_panel(f.name + ' sliding glass %d' % k,
-                    [(left, yy + 0.004, z + 0.10), (left + span / 2, yy + 0.004, z + 0.10),
-                     (left + span / 2, yy + 0.004, z + 2.04), (left, yy + 0.004, z + 2.04)])
-        beam(f.name + ' glass pull %d' % k, (left + span / 2 - 0.08, yy - 0.018, z + 0.95),
-             (left + span / 2 - 0.08, yy - 0.018, z + 1.17), 0.016, 0.016, M['int_steel'])
-    for h in (0.095, 2.055):
-        box(f.name + ' sliding track', (sx0, sy0 - 0.016, z + h),
-            (sx1, sy0 + 0.045, z + h + 0.02), M['int_steel'])
-    box(f.name + ' low rear tile below window', (sx0, sy1 + 0.01, z + 0.08),
-        (sx1, sy1 + 0.027, z + 1.60), M['int_tile'])
-    box(f.name + ' side tile', (sx1, sy0, z + 0.08),
-        (sx1 + 0.014, sy1, z + 2.12), M['int_tile'])
-    interior_tube('Upper | master shower mixer', (sx1 - 0.025, 16.40, z + 1.10),
-                  (sx1 - 0.045, 16.40, z + 1.10), 0.045, M['int_steel'])
-    interior_tube('Upper | master shower head', (sx1 - 0.02, 16.40, z + 2.0),
-                  (sx1 - 0.22, 16.40, z + 2.0), 0.055, M['int_steel'])
+    for a, b in ((sx0 - 0.02, sx0), (sx1, sx1 + 0.014)):
+        box(f.name + ' side tile', (a, sy0, z + 0.08),
+            (b, sy1, z + 2.12), M['int_tile'])
+    # Cut the rear tile around the window AND its interior casing/sill.
+    # The exterior wall builder already cuts shell, siding and drywall.
+    window_mask = (UP_MASTER_SHOWER_WINDOW_X - 0.91 / 2 - 0.075,
+                   UP_MASTER_BATH_WINDOW_Z - 0.05,
+                   UP_MASTER_SHOWER_WINDOW_X + 0.91 / 2 + 0.075,
+                   UP_MASTER_BATH_WINDOW_Z + UP_MASTER_BATH_WINDOW_H + 0.075)
+    for a, low, b, high in subtract_rect((sx0, z + 0.08, sx1, z + 2.12), window_mask):
+        box(f.name + ' rear tile around window', (a, BACK - 0.229, low),
+            (b, BACK - 0.207, high), M['int_tile'])
+    box(f.name + ' built-in bench base', (sx1 - 0.34, sy0 + 0.05, z + 0.04),
+        (sx1, sy1 - 0.04, z + 0.43), M['int_tile'])
+    box(f.name + ' bench stone seat', (sx1 - 0.35, sy0 + 0.04, z + 0.43),
+        (sx1, sy1 - 0.03, z + 0.46), M['int_counter'], 0.003)
+    door_width = 0.78
+    hinge_x = sx0 + door_width
+    assert hinge_x + 0.10 < sx1 - 0.35, 'Shower door conflicts with bench'
+    glass_panel(f.name + ' fixed front glass',
+                [(hinge_x, sy0, z + 0.10), (sx1, sy0, z + 0.10),
+                 (sx1, sy0, z + 2.04), (hinge_x, sy0, z + 2.04)])
+    hinge = Vector((hinge_x, sy0, z + 0.10))
+    along = Vector((0, -1, 0) if SECOND_FLOOR_OPEN_DOORS else (-1, 0, 0))
+    end = hinge + along * door_width
+    door = glass_panel(f.name + ' hinged glass door',
+                       [hinge, end, end + Vector((0, 0, 1.94)),
+                        hinge + Vector((0, 0, 1.94))])
+    door['open_angle_degrees'] = 90 if SECOND_FLOOR_OPEN_DOORS else 0
+    door['reference'] = 'masterbath.png; glass door opening toward bathroom'
+    for h in (z + 0.10, z + 2.04):
+        beam(f.name + ' fixed glass edge', (hinge_x, sy0, h), (sx1, sy0, h),
+             0.016, 0.016, M['int_steel'])
+    beam(f.name + ' glass hinge stile', (hinge_x, sy0, z + 0.10),
+         (hinge_x, sy0, z + 2.04), 0.022, 0.022, M['int_steel'])
+    side = Vector((-along.y, along.x, 0))
+    pull = hinge + along * (door_width - 0.08) + side * 0.025
+    beam(f.name + ' door pull', (pull.x, pull.y, z + 0.95),
+         (pull.x, pull.y, z + 1.17), 0.016, 0.016, M['int_steel'])
+    # Mixer/head on the WC-side wall, away from the bench and rear window.
+    shower_y = (sy0 + sy1) / 2
+    interior_tube('Upper | master shower mixer', (sx0 + 0.005, shower_y, z + 1.10),
+                  (sx0 + 0.035, shower_y, z + 1.10), 0.045, M['int_steel'])
+    interior_tube('Upper | master shower head', (sx0 + 0.005, shower_y, z + 2.0),
+                  (sx0 + 0.22, shower_y, z + 2.0), 0.055, M['int_steel'])
 
     upper_shelf('bedroom 2 closet', (0.27, 10.05, 2.34, 10.32), (0.32, 10.02), (2.29, 10.02))
     upper_shelf('bedroom 3 closet', (0.27, 10.48, 2.34, 10.75), (0.32, 10.78), (2.29, 10.78))
@@ -1928,8 +1980,9 @@ def build_second_floor_fixtures():
                 (UP_MASTER_CLOSET_X + 0.12, 11.95), (UP_MASTER_CLOSET_END_X - 0.12, 11.95))
     upper_shelf('walk-in side', (0.25, 14.74, 0.65, BACK - 0.26),
                 (0.69, 14.85), (0.69, BACK - 0.60))
-    upper_shelf('walk-in rear', (0.66, BACK - 0.60, UP_WIC_X - 0.08, BACK - 0.26),
-                (0.76, BACK - 0.64), (UP_WIC_X - 0.12, BACK - 0.64))
+    # Rear storage stops at the new WC wall, not the wider closet entry leg.
+    upper_shelf('walk-in rear', (0.66, BACK - 0.60, UP_MASTER_WC_X - 0.10, BACK - 0.26),
+                (0.76, BACK - 0.64), (UP_MASTER_WC_X - 0.14, BACK - 0.64))
 
     # Mechanical equipment is an inferred placeholder; enclosure follows plan.
     box('Interior | Upper | HVAC equipment', (3.78, 13.04, z + 0.06),
@@ -1970,19 +2023,25 @@ def build_second_floor():
          (UP_REACHIN_X, UP_BED3_CLOSET_REAR), ((0.35, 1.50, 'bypass', False, 1),)),
         ('bedroom 3 hall entry', (UP_REACHIN_X, UP_HALL_REAR), (bx, UP_HALL_REAR),
          ((0.14, 0.86, 'swing', True, 1),)),
-        ('bedroom 3 and service spine', (bx, UP_HALL_REAR), (bx, UP_WC_REAR), ()),
+        ('bedroom 3 and service spine', (bx, UP_HALL_REAR), (bx, UP_BED3_REAR), ()),
         ('bedroom 3 rear', (inset, UP_BED3_REAR), (bx, UP_BED3_REAR), ()),
         ('utility hall entry', (bx, UP_HALL_REAR), (sx, UP_HALL_REAR),
          ((1.12, 0.78, 'swing', True, 1),)),
         ('HVAC service entry', (bx, UP_UTILITY_REAR), (sx, UP_UTILITY_REAR),
          ((1.08, 0.80, 'swing', True, 1),)),
-        ('HVAC to WC', (bx, UP_HVAC_REAR), (sx, UP_HVAC_REAR), ()),
-        ('master WC entry', (bx, UP_WC_REAR), (sx, UP_WC_REAR),
-         ((0.16, 0.78, 'swing', False, -1),)),
+        # Upgrade: vanity backs onto HVAC; no old WC wall across the bath.
+        ('HVAC to master vanity', (bx, UP_HVAC_REAR), (sx, UP_HVAC_REAR), ()),
         ('suite service and bath boundary', (sx, UP_HALL_REAR), (sx, rear),
-         ((15.07 - UP_HALL_REAR, 0.80, 'swing', False, 1),)),
-        ('walk-in closet entry', (UP_WIC_X, UP_BED3_REAR), (UP_WIC_X, rear),
-         ((0.27, 0.80, 'swing', True, 1),)),
+         ((14.90 - UP_HALL_REAR, 0.80, 'swing', False, 1),)),
+        # L-shaped closet wraps around the relocated rear WC. The passage
+        # between closet and vanity/shower is open, not another partition.
+        ('walk-in closet entry', (UP_WIC_X, UP_BED3_REAR),
+         (UP_WIC_X, UP_MASTER_WC_FRONT), ((0.46, 0.78, 'swing', True, 1),)),
+        ('master WC to closet', (UP_MASTER_WC_X, UP_MASTER_WC_FRONT),
+         (UP_MASTER_WC_X, rear), ()),
+        ('master WC front entry', (UP_MASTER_WC_X, UP_MASTER_WC_FRONT),
+         (bx, UP_MASTER_WC_FRONT), ((0.96, 0.82, 'swing', True, 1),)),
+        ('master WC to shower', (bx, UP_MASTER_WC_FRONT), (bx, rear), ()),
         ('master bedroom loft entry', (sx, UP_MASTER_FRONT), (UP_MASTER_CLOSET_END_X, UP_MASTER_FRONT),
          ((0.13, 0.88, 'swing', False, 1),)),
         ('master reach-in west', (UP_MASTER_CLOSET_X, UP_MASTER_FRONT),
@@ -2000,7 +2059,11 @@ def build_second_floor():
     for name, a, b, doors in walls:
         upper_partition(name, a, b, doors)
 
-    wc = (bx, UP_HVAC_REAR, sx, UP_WC_REAR)
+    wc = (UP_MASTER_WC_X, UP_MASTER_WC_FRONT, bx, rear)
+    # Floor masks follow the upgraded partitions; neither old WC nor closet
+    # flooring may overlap the new bath or leave an unassigned strip of hall.
+    master_wic = (inset, UP_BED3_REAR, UP_WIC_X, rear)
+    master_bath_bedroom_exclusion = (UP_WIC_X, UP_HVAC_REAR, bx, UP_BED3_REAR)
     closet3 = (inset, UP_CLOSET_SPLIT, UP_REACHIN_X, UP_BED3_CLOSET_REAR)
     master_closet = (UP_MASTER_CLOSET_X, UP_MASTER_FRONT,
                      UP_MASTER_CLOSET_END_X, UP_MASTER_CLOSET_REAR)
@@ -2018,8 +2081,9 @@ def build_second_floor():
         ('Utility', (bx, UP_HALL_REAR, sx, UP_UTILITY_REAR), (), ''),
         ('HVAC', (bx, UP_UTILITY_REAR, sx, UP_HVAC_REAR), (), ''),
         ('Master WC', wc, (), ''),
-        ('Master walk-in closet', (inset, UP_BED3_REAR, UP_WIC_X, rear), (), ''),
-        ('Master bath', (UP_WIC_X, UP_BED3_REAR, sx, rear), (wc,), ''),
+        ('Master walk-in closet', master_wic, (wc,), ''),
+        ('Master bath', (UP_WIC_X, UP_HVAC_REAR, sx, rear),
+         (wc, master_bath_bedroom_exclusion), ''),
         ('Master bedroom', (sx, UP_MASTER_FRONT, W - inset, rear),
          (master_closet,), '13 ft 9 in x 15 ft 1 in'),
         ('Master reach-in closet', master_closet, (), ''),
@@ -2063,7 +2127,7 @@ def build_second_floor():
     for obj in COL.objects:
         if obj.name not in before:
             obj['floor_level'] = 2
-            obj['reference'] = 'honor_page-0002.jpg main upper plan; standard bath; mirrored with shell'
+            obj['reference'] = 'Main upper plan with masterbath.png upgrade and guest double vanity; mirrored with shell'
     COL['second_floor_interior'] = True
     COL['second_floor_finish'] = 'User requested matching carpet in all upstairs rooms, halls and closets; shower/tub surfaces unchanged'
     COL['second_floor_rooms'] = '; '.join(room[0] for room in rooms) + '; Loft and hall'
@@ -2073,7 +2137,7 @@ def build_second_floor():
     COL['second_floor_limitations'] = ('Plan fitted to existing FH-1 shell; stair opening corrected '
                                       'to preserve the straight master/loft wall and reach-in closet. '
                                       'Finishes, fixture details and door sizes inferred. '
-                                      'Optional master bath and recessed ceiling not included.')
+                                      'Master bath upgrade follows masterbath.png; recessed ceiling not included.')
 
 
 if BUILD_FIRST_FLOOR:
@@ -2100,7 +2164,9 @@ if BUILD_FIRST_FLOOR:
 if BUILD_SECOND_FLOOR:
     print('Second floor: master suite, bedrooms 2/3, bath 2, closets, utility, HVAC and loft.')
     print('All upstairs room floors and stairs: matching carpet; shower/tub surfaces unchanged.')
-    print('Upper ceiling: 8 ft 8 in. Standard master bath; optional appliances: %s.' % SECOND_FLOOR_LAUNDRY_APPLIANCES)
+    print('Upper ceiling: 8 ft 8 in. Upgraded master bath; optional appliances: %s.' % SECOND_FLOOR_LAUNDRY_APPLIANCES)
+    print('Master upgrade: HVAC-wall double vanity, wider rear shower, rear WC/window and L-shaped closet.')
+    print('Prior guest-bath double vanity and added side windows retained.')
     print('Room sizes fitted to the FH-1 shell; straight master boundary and full-width reach-in closet.')
     if SECOND_FLOOR_CUTAWAY:
         print('CUTAWAY ACTIVE: main roof and upper ceiling omitted. Disable before full-house export.')
