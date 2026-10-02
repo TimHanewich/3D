@@ -211,6 +211,19 @@ UP_MASTER_FRONT = 11.50
 UP_MASTER_CLOSET_X = 6.85
 UP_MASTER_CLOSET_END_X = W - 0.205
 UP_MASTER_CLOSET_REAR = UP_MASTER_FRONT + 0.72
+# window_upstairs.png: master bedroom side window just rearward of the closet.
+# Built on X = W; mirrors to the left exterior wall with RIGHT_HAND_GARAGE.
+# Position inferred from the plan; size/sill match the existing master windows.
+MASTER_SIDE_WINDOW_Y = UP_MASTER_CLOSET_REAR + 0.90
+MASTER_SIDE_WINDOW_WIDTH = 0.94
+MASTER_SIDE_WINDOW_SILL_Z = 4.23
+MASTER_SIDE_WINDOW_HEIGHT = 1.68
+assert MASTER_SIDE_WINDOW_WIDTH > 0 and MASTER_SIDE_WINDOW_HEIGHT > 0
+assert (MASTER_SIDE_WINDOW_Y - MASTER_SIDE_WINDOW_WIDTH / 2 - 0.115
+        > UP_MASTER_CLOSET_REAR + INTERIOR_WALL_T / 2)
+assert MASTER_SIDE_WINDOW_Y + MASTER_SIDE_WINDOW_WIDTH / 2 + 0.115 < BACK - 0.205
+assert SECOND_FLOOR_Z + 0.10 < MASTER_SIDE_WINDOW_SILL_Z - 0.065
+assert MASTER_SIDE_WINDOW_SILL_Z + MASTER_SIDE_WINDOW_HEIGHT + 0.095 < SECOND_CEILING_Z
 PLAN_REFERENCE_IMAGE = r'C:\Users\timh\Downloads\ilovepdf_pages-to-jpg\honor_page-0002.jpg'
 assert SECOND_FLOOR_Z < SECOND_CEILING_Z < UPPER_EAVE
 assert UP_BED_X < UP_BATH2_X < UP_SUITE_X < UP_MASTER_CLOSET_X < UP_MASTER_CLOSET_END_X
@@ -997,7 +1010,10 @@ wall(front_upper, UPPER_FLOOR, UPPER_EAVE,
 wall(Facade('Upper left', (0, FRONT), (0, 1), (-1, 0), BACK - FRONT), UPPER_FLOOR, UPPER_EAVE,
      [opening('bedroom 3 side', 5.74, 0.94, 4.23, 1.68)], lap=True)
 wall(Facade('Upper right', (W, FRONT), (0, 1), (1, 0), BACK - FRONT), UPPER_FLOOR, UPPER_EAVE,
-     [opening('stairwell side', 3.29, 0.87, 4.23, 1.68)], lap=True)
+     [opening('stairwell side', 3.29, 0.87, 4.23, 1.68),
+      opening('master bedroom side window', MASTER_SIDE_WINDOW_Y - FRONT,
+              MASTER_SIDE_WINDOW_WIDTH, MASTER_SIDE_WINDOW_SILL_Z,
+              MASTER_SIDE_WINDOW_HEIGHT)], lap=True)
 wall(Facade('Upper rear', (0, BACK), (1, 0), (0, 1), W), UPPER_FLOOR, UPPER_EAVE,
      [opening('bath rear', 4.80, 0.91, 5.07, 0.69),
       opening('master rear left', 6.48, 0.94, 4.23, 1.68),
