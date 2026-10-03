@@ -887,7 +887,18 @@ def build_interior():
     partition('Garage to laundry',(300,813),(524,813),[(170,46,'door')])
     partition('Garage east return',(524,813),(524,990))
 
-    # Keep family/kitchen, kitchen/living and the central gallery open.
+    # Living/kitchen divider, confirmed by the supplied interior photograph:
+    # the living-room bookcase backs onto this wall, with the refrigerator
+    # and range on its kitchen side. Do not leave this whole boundary open.
+    # Shift the centerline just east of the traced x=680 boundary so the
+    # kitchen-side face clears the existing appliance bodies (ending x=679).
+    # The rear passage and the front gallery remain open; no door leaves.
+    living_divider_x = 680 + INTERIOR_WALL_THICKNESS/(2*SCALE)
+    partition('Living kitchen angled rear return',(712,540),(living_divider_x,578))
+    partition('Living kitchen divider',(living_divider_x,578),(living_divider_x,740),
+              [(0,48,'open')])
+
+    # Family/kitchen and the central gallery remain open.
     partition('Living to master',(972,540),(972,740))
     partition('Master suite gallery threshold',(972,740),(1085,740),[(12,86,'open')])
     partition('Master bath approach',(1085,704),(1085,796))
