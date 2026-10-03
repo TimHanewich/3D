@@ -569,7 +569,13 @@ def pool_cage_frame():
     # no fence posts or low rails are placed across the French doors.
     rear_x = [446,607,737,867,997,1127,1257]
     for a,b in zip(rear_x,rear_x[1:]):
-        wall_bay((a,84),(b,84))
+        if a == 607:
+            # Additional access beside the house-side post in the marked bay.
+            # Split the wall rails at the door; keep the roof bays unchanged.
+            wall_bay((a,84),(665,84),door=True)
+            wall_bay((665,84),(b,84))
+        else:
+            wall_bay((a,84),(b,84))
     end_y = [84,175,255,324,376,410]
     for a,b in zip(end_y,end_y[1:]):
         wall_bay((1257,a),(1257,b),door=(a == 324))
