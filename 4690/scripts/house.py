@@ -887,12 +887,9 @@ def build_interior():
     partition('Garage to laundry',(300,813),(524,813),[(170,46,'door')])
     partition('Garage east return',(524,813),(524,990))
 
-    # Living/kitchen divider, confirmed by the supplied interior photograph:
-    # the living-room bookcase backs onto this wall, with the refrigerator
-    # and range on its kitchen side. Do not leave this whole boundary open.
-    # Shift the centerline just east of the traced x=680 boundary so the
-    # kitchen-side face clears the existing appliance bodies (ending x=679).
-    # The rear passage and the front gallery remain open; no door leaves.
+    # Preserve the living/kitchen divider and its existing openings.
+    # In the kitchen reference photo, this divider is on the LEFT.
+    # Appliance positions are defined in photo_kitchen() below.
     living_divider_x = 680 + INTERIOR_WALL_THICKNESS/(2*SCALE)
     partition('Living kitchen angled rear return',(712,540),(living_divider_x,578))
     partition('Living kitchen divider',(living_divider_x,578),(living_divider_x,740),
@@ -931,9 +928,7 @@ def build_interior():
     prism('Interior continuous oak finish',outline,.002,INTERIOR_FLOOR_Z,wood,
           'Interior floors')
     tile_areas = [
-        ('Kitchen and breakfast',[(367,500),(530,500),(607,440),(712,540),
-                                   (680,578),(680,740),(463,740),(463,813),
-                                   (300,813),(300,730),(367,730)]),
+        ('Laundry service strip',[(300,730),(463,730),(463,813),(300,813)]),
         ('Gallery and foyer',[(463,740),(1085,740),(1085,796),(900,796),
                               (836,848),(836,902),(708,902),(708,848),
                               (641,788),(524,788),(524,813),(463,813)]),
@@ -1084,31 +1079,323 @@ def build_interior():
         box(name+' shower head',head+Vector((-.22,0,-.018)),(.18,.18,.035),metal,
             'Interior fixtures')
 
-    # Kitchen: west/south L, angled breakfast bar, refrigerator and range on east.
-    west = worktop('Kitchen west counter',(385,573,417,696))
-    worktop('Kitchen south counter',(402,696,564,728))
-    sink('Kitchen double sink left',west,(401,630),rx=.20,ry=.17)
-    sink('Kitchen double sink right',west,(401,651),rx=.20,ry=.17)
-    rect('Dishwasher stainless front',(385,667,386,693),fz+.10,.84,metal)
-    barpoly = [(475,555),(514,555),(563,600),(563,653),(516,653),(516,618),(475,580)]
-    prism('Angled breakfast bar base',barpoly,fz,.88,cabinet,'Interior cabinetry')
-    prism('Angled breakfast bar quartz',barpoly,.88,.93,stone,'Interior cabinetry')
-    prism('Raised breakfast serving ledge',[(475,555),(487,550),(568,596),
-          (568,625),(552,625),(552,605),(475,570)],1.04,1.09,stone,'Interior cabinetry')
-    worktop('Range base',(645,685,679,736))
-    rect('Range cooktop',(644,686,680,733),.901,.925,dark,'Interior fixtures')
-    for x in (653,670):
-        for y in (697,722):
-            oval('Range burner',(x,y),.085,.085,[(.925,1),(.933,1)],metal)
-    rect('Oven front',(644,689,645,731),fz+.17,.78,dark,'Interior fixtures')
-    rect('Range hood',(644,686,680,733),1.78,1.91,metal,'Interior fixtures')
-    rect('Range hood chimney',(657,697,679,722),1.91,2.65,metal,'Interior fixtures')
-    rect('Refrigerator body',(644,626,679,678),fz,2.05,metal,'Interior fixtures')
-    rect('Refrigerator door division',(643,651,644,653),fz+.02,2.02,dark,'Interior fixtures')
-    for y in (647,657):
-        beam('Refrigerator pull',pt((641,y),1.0),pt((641,y),1.58),.024,metal,'Interior fixtures')
-    rect('Kitchen upper west cabinets',(376,574,394,608),1.45,2.35,cabinet)
-    rect('Kitchen upper south cabinets',(421,710,508,728),1.45,2.35,cabinet)
+    # KITCHEN_PHOTO_OVERHAUL_V3
+    def photo_kitchen():
+        cg = 'Interior cabinetry'
+        fg = 'Interior fixtures'
+
+        white = material('Kitchen ivory enamel', (.92,.90,.83), .34)
+        inset = material('Kitchen recessed panels', (.84,.82,.74), .43)
+        granite = material('Kitchen dark green granite', (.03,.05,.04), .23, .001)
+        honey = material('Kitchen honey oak', (.57,.31,.095), .42, .001)
+        splash = material('Kitchen cream backsplash', (.80,.75,.63), .43)
+        hardware = material('Kitchen satin pulls', (.49,.45,.32), .24)
+        hardware.node_tree.nodes.get('Principled BSDF').inputs['Metallic'].default_value = .8
+
+        nodes = granite.node_tree.nodes
+        links = granite.node_tree.links
+        noise = nodes.new('ShaderNodeTexNoise')
+        noise.inputs['Scale'].default_value = 125
+        noise.inputs['Detail'].default_value = 3
+        ramp = nodes.new('ShaderNodeValToRGB')
+        ramp.color_ramp.elements[0].position = .28
+        ramp.color_ramp.elements[0].color = (.009,.016,.012,1)
+        ramp.color_ramp.elements[1].position = .78
+        ramp.color_ramp.elements[1].color = (.21,.24,.18,1)
+        links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+        links.new(ramp.outputs['Color'],
+                  nodes.get('Principled BSDF').inputs['Base Color'])
+
+        def block(name, bounds, low, high, mat=white, group=cg):
+            return rect('Kitchen '+name, bounds, low, high, mat, group)
+
+        def soft(ob):
+            bevel = ob.modifiers.new('Kitchen softened edges', 'BEVEL')
+            bevel.width = .004
+            bevel.segments = 2
+            return ob
+
+        # u runs along the cabinet front; v points into its body.
+        def q(origin, u, v, z, facing):
+            x,y = origin
+            if facing == 'east':
+                return pt((x-v/SCALE, y+u/SCALE), z)
+            if facing == 'west':
+                return pt((x+v/SCALE, y+u/SCALE), z)
+            return pt((x+u/SCALE, y+v/SCALE), z)
+
+        def panel(name, origin, u, v, z, w, d, h, facing, mat=white):
+            size = (d,w,h) if facing in ('east','west') else (w,d,h)
+            return box('Kitchen '+name, q(origin,u,v,z,facing),
+                       size, mat, cg)
+
+        def door(name, origin, u, w, low, high, facing, drawer=False):
+            mid = (low+high)/2
+            panel(name+' inset', origin,u,-.012,mid,
+                  w-.008,.023,high-low-.008,facing,inset)
+            for side in (-1,1):
+                panel(name+' stile', origin,u+side*(w/2-.024),-.028,mid,
+                      .042,.026,high-low,facing)
+            for z in (low+.021, high-.021):
+                panel(name+' rail', origin,u,-.028,z,
+                      w-.08,.026,.042,facing)
+            z = mid if drawer else high-.09
+            if drawer:
+                beam('Kitchen drawer pull',
+                     q(origin,u-.055,-.065,z,facing),
+                     q(origin,u+.055,-.065,z,facing),
+                     .023,hardware,cg)
+            else:
+                panel(name+' knob', origin,u+w*.29,-.063,z,
+                      .025,.027,.025,facing,hardware)
+
+        def unit(name, origin, width, facing='east', depth=.59,
+                 low=None, high=.905, drawers=False):
+            bottom = fz+.11 if low is None else low
+            panel(name+' bottom', origin,0,depth/2,bottom,
+                  width,depth,.022,facing)
+            panel(name+' back', origin,0,depth-.01,(bottom+high)/2,
+                  width,.02,high-bottom,facing)
+            for side in (-1,1):
+                panel(name+' side', origin,side*(width/2-.01),
+                      depth/2,(bottom+high)/2,
+                      .02,depth,high-bottom,facing)
+            if low is None:
+                panel(name+' toe kick', origin,0,depth/2+.04,fz+.05,
+                      width-.04,depth-.08,.10,facing,dark)
+            if drawers:
+                for i in range(3):
+                    a = bottom+(high-bottom)*i/3+.005
+                    b = bottom+(high-bottom)*(i+1)/3-.005
+                    door(name+' drawer',origin,0,width-.008,
+                         a,b,facing,True)
+            else:
+                count = max(1,math.ceil(width/.53))
+                for i in range(count):
+                    w = width/count
+                    door(name+' door',origin,-width/2+(i+.5)*w,
+                         w-.008,bottom+.005,high-.005,facing)
+
+        # Oak replaces kitchen tile; laundry and gallery finishes stay intact.
+        floor_poly = [(367,500),(530,500),(607,440),(712,540),
+                      (680,578),(680,740),(463,740),(367,730)]
+        prism('Kitchen honey oak floor',floor_poly,
+              INTERIOR_FLOOR_Z,fz-.002,honey,'Interior floors')
+        boards = [
+            material('Kitchen oak board %02d' % i,
+                     (.52+i*.02,.27+i*.013,.075+i*.007),.42,.0007)
+            for i in range(6)
+        ]
+        for ix,x in enumerate(range(370,710,7)):
+            for y in range(383+(ix%3)*19,740,57):
+                a,b = x+.05,max(y+.05,440)
+                c,d = x+6.95,min(y+56.95,740)
+                corners = ((a,b),(c,b),(c,d),(a,d))
+                if d > b and all(inside(p,floor_poly) for p in corners):
+                    rect('Kitchen staggered oak plank',(a,b,c,d),
+                         fz-.002,fz-.001,boards[(ix+y//57)%6],
+                         'Interior floors')
+
+        # Start the west run beyond the existing bedroom doorway.
+        block('west backing',(371,603,374,730),fz,2.65,paint)
+        block('rear backing',(374,730,677,733),fz,2.65,paint)
+        block('west backsplash',(374,604,374.8,729),.945,1.49,splash)
+        block('rear backsplash',(375,729,620,729.8),.945,1.49,splash)
+
+        for y in range(609,729,12):
+            center = Vector(pt((375,y),1.18))
+            offsets = ((0,-.035,0),(0,0,.045),
+                       (0,.035,0),(0,0,-.045))
+            mesh('Kitchen backsplash diamond',
+                 [tuple(center+Vector(v)) for v in offsets],
+                 [(0,1,2,3)],hardware,cg)
+        for x in range(385,618,12):
+            center = Vector(pt((x,728.8),1.18))
+            offsets = ((-.035,0,0),(0,0,.045),
+                       (.035,0,0),(0,0,-.045))
+            mesh('Kitchen rear backsplash diamond',
+                 [tuple(center+Vector(v)) for v in offsets],
+                 [(0,1,2,3)],hardware,cg)
+
+        for a,b in ((604,629),(672,697)):
+            unit('west drawer stack',(405,(a+b)/2),
+                 (b-a)*SCALE,drawers=True)
+            unit('west upper',(392,(a+b)/2),(b-a)*SCALE,
+                 depth=.34,low=1.49,high=2.40)
+        unit('corner upper',(392,713),32*SCALE,
+             depth=.34,low=1.49,high=2.40)
+        block('corner base',(375,699,405,729),fz+.11,.905)
+        soft(block('west front granite',(372,601,409,629),
+                   .905,.945,granite))
+        soft(block('west rear granite',(372,672,409,732),
+                   .905,.945,granite))
+
+        for a,b in ((409,451),(451,493),(493,535),
+                    (535,577),(577,620)):
+            unit('rear base',((a+b)/2,699),(b-a)*SCALE,'north')
+            unit('rear upper',((a+b)/2,712),(b-a)*SCALE,
+                 'north',depth=.34,low=1.49,high=2.40)
+        soft(block('rear granite',(409,696,621,732),
+                   .905,.945,granite))
+
+        # Stainless range and over-range microwave on photograph's right.
+        block('range body',(374,630,406,671),fz,.905,metal,fg)
+        block('range glass top',(373,630,407,671),.905,.932,dark,fg)
+        for x in (382,398):
+            for y in (640,661):
+                oval('Kitchen burner rim',(x,y),.108,.108,
+                     [(.932,1),(.935,1)],metal)
+                oval('Kitchen burner glass',(x,y),.094,.094,
+                     [(.935,1),(.937,1)],dark)
+        block('oven window',(406,634,407,667),fz+.18,.70,dark,fg)
+        beam('Kitchen oven handle',pt((409,635),.77),
+             pt((409,666),.77),.031,metal,fg)
+        for y in (636,645,656,665):
+            box('Kitchen range control',pt((407.5,y),.85),
+                (.026,.035,.035),hardware,fg)
+        block('microwave shell',(374,630,396,671),1.53,1.99,metal,fg)
+        block('microwave window',(396,633,396.6,660),1.60,1.92,dark,fg)
+        beam('Kitchen microwave pull',pt((398,664),1.60),
+             pt((398,664),1.91),.025,metal,fg)
+        unit('microwave bridge',(392,650.5),41*SCALE,
+             depth=.34,low=2.01,high=2.40)
+
+        # Back-left refrigerator: paired doors, dispenser and freezer drawer.
+        block('refrigerator carcass',(623,687,675,729),fz,2.12,dark,fg)
+        for a,b in ((624,648),(649,674)):
+            soft(block('refrigerator door',(a,685,b,687),
+                       .70,2.10,metal,fg))
+        soft(block('freezer drawer',(624,685,674,687),
+                   fz+.04,.685,metal,fg))
+        block('water dispenser',(628,684.5,640,685),1.12,1.46,dark,fg)
+        for x in (645,652):
+            beam('Kitchen fridge pull',pt((x,683),1.05),
+                 pt((x,683),1.76),.029,metal,fg)
+        beam('Kitchen freezer pull',pt((629,683),.58),
+             pt((669,683),.58),.03,metal,fg)
+        block('fridge left filler',(621,688,623,731),fz,2.42)
+        block('fridge right filler',(675,688,677,731),fz,2.42)
+        unit('fridge bridge',(649,712),52*SCALE,'north',
+             depth=.34,low=2.16,high=2.40)
+
+        # Two-level sink bar, with seating toward the living-room divider.
+        # Leave a circulation gap between its south end and rear counter.
+        unit('sink base',(543,580),58*SCALE,'west',depth=.64)
+        block('dishwasher body',(544,610,576,639),fz+.10,.90,metal,fg)
+        block('dishwasher front',(542,610,544,639),fz+.11,.88,metal,fg)
+        block('dishwasher controls',(541.7,610,542,639),.81,.88,dark,fg)
+        beam('Kitchen dishwasher pull',pt((540,613),.76),
+             pt((540,636),.76),.027,metal,fg)
+        block('bar closed end',(543,639,578,641),fz,.905)
+        block('bar beadboard backing',(577,550,580,641),fz,1.095)
+        for y in range(551,641,2):
+            block('beadboard groove',(580,y,580.18,y+.20),
+                  fz+.09,1.08,inset)
+        for y in (551,640):
+            block('bar end post',(577,y-1,582,y+1),fz,1.10)
+
+        top = block('sink bar granite',(540,548,580,643),
+                    .905,.945,granite)
+        for y in (570,592):
+            cutter = rect('Kitchen sink cutter',
+                          (548,y-9,571,y+9),.70,1.02,None,fg)
+            difference(top,cutter)
+            verts,faces = [],[]
+            for z,rx,ry in ((.950,.240,.191),
+                           (.950,.220,.172),
+                           (.770,.17,.12)):
+                base = Vector(pt((559.5,y),z))
+                verts.extend([
+                    tuple(base+Vector((sx*rx,sy*ry,0)))
+                    for sx,sy in ((-1,-1),(1,-1),(1,1),(-1,1))
+                ])
+            for row in range(2):
+                for j in range(4):
+                    faces.append((
+                        row*4+j,row*4+(j+1)%4,
+                        (row+1)*4+(j+1)%4,(row+1)*4+j
+                    ))
+            faces.append((8,9,10,11))
+            mesh('Kitchen stainless double sink bowl',
+                 verts,faces,metal,fg)
+            oval('Kitchen sink drain',(559.5,y),.032,.032,
+                 [(.771,1),(.774,1)],dark)
+        soft(top)
+
+        base = Vector(pt((574.5,581),.945))
+        points = [base,base+Vector((0,0,.22))]
+        points += [
+            base+Vector((
+                -.115+.115*math.cos(math.pi*i/16),0,
+                .22+.115*math.sin(math.pi*i/16)
+            ))
+            for i in range(1,17)
+        ]
+        points.append(base+Vector((-.23,0,.16)))
+        for a,b in zip(points,points[1:]):
+            beam('Kitchen high arch faucet',a,b,.025,metal,fg)
+        beam('Kitchen faucet lever',pt((575,584),.99),
+             pt((575,588),1.08),.018,metal,fg)
+        soft(block('raised breakfast ledge',(578,546,603,643),
+                   1.095,1.14,granite))
+        for y in (557,590,632):
+            beam('Kitchen bar bracket',pt((580,y),.91),
+                 pt((594,y),1.075),.045,white,cg)
+
+        # Soffits and recessed lenses; leave scene lighting unchanged.
+        block('west soffit',(370,601,400,735),2.43,2.68)
+        block('rear soffit',(400,704,678,735),2.43,2.68)
+        lens = material('Kitchen warm downlight lenses',(1.0,.84,.53),.25)
+        shader = lens.node_tree.nodes.get('Principled BSDF')
+        shader.inputs['Emission Color'].default_value = (1.0,.78,.43,1)
+        shader.inputs['Emission Strength'].default_value = 2.0
+        lights = [(397,y) for y in (614,650,690,720)]
+        lights += [(x,707) for x in (438,480,524,568,647)]
+        for p in lights:
+            oval('Kitchen downlight rim',p,.066,.066,
+                 [(2.419,1),(2.432,1)],metal,cg)
+            oval('Kitchen downlight lens',p,.052,.052,
+                 [(2.417,1),(2.420,1)],lens,cg)
+
+        for x,h in ((467,.20),(481,.17),(494,.15)):
+            oval('Kitchen ceramic canister',(x,718),.065,.065,
+                 [(.946,1),(.946+h,1)],ceramic)
+            oval('Kitchen canister lid',(x,718),.07,.07,
+                 [(.946+h,1),(.963+h,1)],white)
+
+        if MAKE_INTERIOR_FURNITURE:
+            group = 'Interior furniture'
+            for y in (558,597,636):
+                center = Vector(pt((619,y),fz))
+                box('Kitchen oak stool seat',center+Vector((0,0,.77)),
+                    (.43,.46,.06),honey,group)
+                for sx in (-1,1):
+                    for sy in (-1,1):
+                        beam('Kitchen stool leg',
+                             center+Vector((sx*.23,sy*.23,0)),
+                             center+Vector((sx*.16,sy*.17,.75)),
+                             .037,honey,group)
+                for sx in (-1,1):
+                    beam('Kitchen stool foot rail',
+                         center+Vector((sx*.20,-.20,.29)),
+                         center+Vector((sx*.20,.20,.29)),
+                         .025,honey,group)
+                for i in range(5):
+                    beam('Kitchen stool back spindle',
+                         center+Vector((.19,-.18+i*.09,.79)),
+                         center+Vector((.25,-.18+i*.09,1.35)),
+                         .019,honey,group)
+                beam('Kitchen stool crest',
+                     center+Vector((.25,-.24,1.36)),
+                     center+Vector((.25,.24,1.36)),
+                     .055,honey,group)
+
+        root['kitchen_reference'] = (
+            'Photo overhaul V3; living divider at photo left; '
+            'dimensions estimated'
+        )
+
+    photo_kitchen()
 
     shared = worktop('Shared bath double vanity',(219,437,311,466),.86)
     for x in (235,291):
@@ -1229,8 +1516,7 @@ def build_interior():
         chair('Master sitting chair left',(1150,485),.35)
         chair('Master sitting chair right',(1222,487),-.35)
         table('Master sitting side table',(1187,490),.40,.40,.48)
-        for p in [(466,589),(491,614),(500,654)]:
-            chair('Breakfast bar stool',p,math.pi/4)
+        # Bar-height oak stools are built by photo_kitchen().
         table('Garage workbench',(423,1197),2.40,.66,.91)
 
     if MAKE_INTERIOR_CEILINGS:
