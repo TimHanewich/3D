@@ -346,23 +346,31 @@ def stepped_waterfall():
     def block(label,x0,x1,y0,y1,z0,z1,mat):
         return prism('Waterfall '+label,footprint(x0,x1,y0,y1),z0,z1,mat)
 
-    def along_wall(s,distance):
-        # s follows the actual perimeter: long wall -> diagonal -> end wall.
-        # Offsets use the same mitered corners as the pool coping.
-        loop = pool if distance == 0 else offset(pool,distance)
+    def along_wall(s):
+        # Measure along the original pool perimeter, without offset scaling.
         if s < 0:
-            t = (s+before_length)/before_length
-            return loop[2]+(loop[3]-loop[2])*t
+            return a+(a-pool[2])*(s/before_length)
         if s <= corner_length:
-            return loop[3]+(loop[4]-loop[3])*(s/corner_length)
-        return loop[4]+(loop[5]-loop[4])*((s-corner_length)/after_length)
+            return a+(b-a)*(s/corner_length)
+        return b+(pool[5]-b)*((s-corner_length)/after_length)
 
     def wall_strip(start,end,depth):
-        stations = [start]+[s for s in (0,corner_length) if start < s < end]+[end]
-        # Inner face is EXACTLY on the pool wall, not set back on the deck.
-        # Every tier extends outward only; no change to the water opening.
-        return ([along_wall(s,0) for s in stations]+
-                [along_wall(s,depth) for s in reversed(stations)])
+        p0,p1 = along_wall(start),along_wall(end)
+        # Rectangular wings: end cuts are perpendicular to the pool wall.
+        # Do not interpolate an offset perimeter; that skews the end cuts.
+        if end <= 0:
+            normal = Vector((0,depth))
+            return [p0,p1,p1+normal,p0+normal]
+        if start >= corner_length:
+            normal = Vector((depth,0))
+            return [p0,p1,p1+normal,p0+normal]
+        # Central platform hugs the pool's clipped INNER corner but has a
+        # square OUTER corner and axis-aligned ends, matching the reference.
+        # Its footprint remains entirely outside the original basin.
+        return [p0,a,b,p1,
+                Vector((b.x+depth,p1.y)),
+                Vector((b.x+depth,a.y+depth)),
+                Vector((p0.x,a.y+depth))]
 
     # High central tier bends around both ends of the clipped corner.
     # Lower wings continue along the two adjoining pool walls, hugging them.
