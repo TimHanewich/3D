@@ -1,4 +1,4 @@
-"""4690 — pool, deck, and photo-inspired raised spillover spa.
+"""4690 — continuous swimming pool and surrounding deck.
 Run in Blender's Scripting workspace after house.py (or independently).
 Uses exactly the house.py scale/origin: meters, front = negative world Y.
 Only objects in P4690 are replaced on rerun; H4690 remains untouched.
@@ -6,9 +6,9 @@ No cameras, lighting, world changes, render settings, or automatic saves.
 
 Pool outline traced from the supplied 1440px floorplan. Approximately
 30 ft long by 14.3 ft wide, consistent with pool_dimensions.md estimates.
-Depths, steps, spa dimensions and finishes are visual estimates, NOT survey
-or construction dimensions. The raised spa is inferred from photographs;
-its partition/location is not explicitly identified on the floorplan.
+Depths, steps and finishes are visual estimates, NOT survey or construction
+dimensions. Owner confirmed one continuous pool: no hot tub or partition.
+The original outline, including its small projection, is unchanged.
 No screen enclosure, landscaping, furniture, equipment, or safety fencing.
 The deck stops at the existing covered-lanai edge; no duplicate lanai slab.
 Water appearance depends on the scene's existing lighting/render engine.
@@ -26,7 +26,7 @@ WATER_Z = -.13
 SHALLOW_DEPTH = .95       # Below water, at the pool-bath end.
 DEEP_DEPTH = 1.65         # Below water, at the master-suite end.
 COPING_WIDTH = .28
-MAKE_SPA = True
+MAKE_SPA = False         # No spa geometry or cutout: one continuous pool.
 SPA_RIM_Z = .39
 SPA_WATER_Z = .29
 
