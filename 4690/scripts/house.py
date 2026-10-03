@@ -7,12 +7,14 @@ REFERENCE / ACCURACY NOTES
 Floorplan coordinates were manually traced from the supplied 1440px image.
 Scale: approximately 207 image pixels = 13 feet. Front = negative world Y.
 The plan is not a survey; wall heights, roof layout/pitch, window elevations,
-spa, cage dimensions and finishes are photo-based estimates. Optional rear
-pool bathroom is included; its existence is not confirmed by the photographs.
-Pool outline follows the plan; raised spa is inferred from the pool photograph.
+and finishes are photo-based estimates. Optional rear pool bathroom is included;
+its existence is not confirmed by the photographs.
 Roof intersections are overlapping hip volumes, not construction-ready framing.
-No interior partitions, furniture, landscaping that hides the facade, or automatic
-.blend save. Cameras and lighting are provided. All lengths are in meters.
+House geometry and materials only, including the porch and covered lanai.
+No pool, spa, screen enclosure, landscaping, driveway, or walkway.
+No cameras, lights, world setup, render settings, or viewport configuration.
+No interior partitions or automatic .blend save. Coordinates are in meters.
+Existing unrelated scene objects and presentation settings are left untouched.
 """
 import math
 import random
@@ -27,7 +29,6 @@ WALL_THICKNESS = 0.22
 ROOF_PITCH = 0.36
 ROOF_OVERHANG_PX = 24
 MAKE_ROOF_TILES = True
-MAKE_SCREEN_MESH = True
 INCLUDE_POOL_BATH = True
 PREFIX = 'H4690'
 random.seed(4690)
@@ -54,7 +55,7 @@ if old:
 root = bpy.data.collections.new(PREFIX)
 bpy.context.scene.collection.children.link(root)
 groups = {}
-for name in ['Shell', 'Openings', 'Trim', 'Roofs', 'Pool', 'Enclosure', 'Site', 'Cameras']:
+for name in ['Shell', 'Openings', 'Trim', 'Roofs']:
     col = bpy.data.collections.new(PREFIX + '_' + name)
     root.children.link(col)
     groups[name] = col
@@ -93,35 +94,7 @@ glass.node_tree.nodes.get('Principled BSDF').inputs['Metallic'].default_value = 
 shadow = material('Dark reveal', (0.035, 0.045, 0.038))
 pavers = material('Terracotta stone paving', (0.53, 0.40, 0.30), noise=0.016)
 coping = material('Pale pool coping', (0.83, 0.82, 0.68), noise=0.009)
-blue = material('Waterline mosaic blue', (0.055, 0.28, 0.40), 0.26)
-plaster = material('Pool interior turquoise', (0.16, 0.56, 0.58), 0.35)
-water = material('Pool water', (0.08, 0.55, 0.59), 0.10)
-ws = water.node_tree.nodes.get('Principled BSDF')
-for socket in ('Transmission Weight', 'Transmission'):
-    if socket in ws.inputs:
-        ws.inputs[socket].default_value = 0.65
-ws.inputs['IOR'].default_value = 1.333
-wn = water.node_tree.nodes.new('ShaderNodeTexNoise')
-wn.inputs['Scale'].default_value = 4.5
-wb = water.node_tree.nodes.new('ShaderNodeBump')
-wb.inputs['Strength'].default_value = .18
-wb.inputs['Distance'].default_value = .05
-water.node_tree.links.new(wn.outputs['Fac'], wb.inputs['Height'])
-water.node_tree.links.new(wb.outputs['Normal'], ws.inputs['Normal'])
-grass = material('Lawn', (0.16, 0.25, 0.07), noise=.035)
-concrete = material('Driveway concrete', (.63, .60, .52), noise=.016)
-screen = material('Insect screen', (.16, .20, .19))
-sn = screen.node_tree.nodes
-sn.clear()
-so = sn.new('ShaderNodeOutputMaterial')
-st = sn.new('ShaderNodeBsdfTransparent')
-sd = sn.new('ShaderNodeBsdfDiffuse')
-sd.inputs['Color'].default_value = (.13, .17, .15, 1)
-sm = sn.new('ShaderNodeMixShader')
-sm.inputs[0].default_value = .045
-screen.node_tree.links.new(st.outputs[0], sm.inputs[1])
-screen.node_tree.links.new(sd.outputs[0], sm.inputs[2])
-screen.node_tree.links.new(sm.outputs[0], so.inputs['Surface'])
+concrete = material('Garage seam finish', (.63, .60, .52), noise=.016)
 
 
 def mesh(name, verts, faces, mat, group='Shell'):
@@ -309,7 +282,7 @@ garage_door((160,933),4.20)
 garage_door((186,1155),2.40)
 
 # Front porch and signature three-bay arched colonnade.
-slab('Front porch paving',(524,902,1032,1080),-.04,.035,pavers,'Site')
+slab('Front porch paving',(524,902,1032,1080),-.04,.035,pavers,'Shell')
 for x in (541,684,845,1011):
     base = pt((x,1068),1.38)
     box('Porch square pier',base,(.29,.34,2.76),stucco,'Trim')
@@ -411,130 +384,10 @@ if MAKE_ROOF_TILES:
 
 # Flat covered lanai tucked between the family room and master wing.
 lanai = [(607,410),(1100,410),(1100,414),(972,540),(712,540),(607,440)]
-prism('Lanai paving',lanai,-.03,.025,pavers,'Pool')
+prism('Lanai paving',lanai,-.03,.025,pavers,'Shell')
 prism('Covered lanai roof',lanai,3.03,3.18,roofmat,'Roofs')
 beam('Lanai rear fascia',pt((607,410),3.08),pt((1100,410),3.08),.18)
 for x in (617,1090):
     box('Lanai support',pt((x,420),1.50),(.20,.20,3.00),stucco,'Trim')
 
-# -------------------------- pool and site --------------------------
-pool_outline = [(684,147),(715,119),(810,119),(840,147),(1128,147),
-                (1163,179),(1163,281),(1095,347),(929,347),(909,328),
-                (816,328),(784,297),(715,297),(715,250),(684,221)]
-deck_outline = [(447,81),(1258,81),(1258,410),(607,410),(607,188),(447,188)]
-# Pool cavity genuinely cuts through the deck and lawn, not a blue slab on top.
-lawn = slab('Lawn ground',(-430,-270,1750,1740),-1.80,-.13,grass,'Site')
-difference(lawn,prism('Ground pool excavation',pool_outline,-2.0,.30,None,'Pool'))
-deck = prism('Pool deck',deck_outline,-.12,.005,pavers,'Pool')
-difference(deck,prism('Deck pool opening',pool_outline,-.30,.30,None,'Pool'))
-prism('Pool bottom',pool_outline,-1.49,-1.44,plaster,'Pool')
-for i,p in enumerate(pool_outline):
-    q = pool_outline[(i+1)%len(pool_outline)]
-    av,bv = Vector(pt(p)),Vector(pt(q)); mid = (av+bv)/2
-    angle = math.atan2(bv.y-av.y,bv.x-av.x)
-    box('Pool basin wall',(*mid[:2],-.73),((bv-av).length,.12,1.44),plaster,'Pool',angle)
-    box('Blue waterline tile',(*mid[:2],-.12),((bv-av).length,.135,.25),blue,'Pool',angle)
-    box('Wide cream pool coping',(*mid[:2],.035),((bv-av).length+.035,.43,.10),coping,'Pool',angle)
-mesh('Water surface',[pt(p,-.16) for p in pool_outline],[tuple(range(len(pool_outline)))],water,'Pool')
-# Broad shallow entry steps at the angular end of the pool.
-for i,(bounds,top) in enumerate([((718,251,781,278),-.28),((724,278,786,296),-.47),((749,298,806,316),-.66)]):
-    slab('Submerged entry step %d'%i,bounds,-1.43,top,plaster,'Pool')
-# Photo shows a raised square spa at the far end; its exact location is uncertain.
-spa_bounds = (851,88,970,145)
-spa = slab('Raised spa body',spa_bounds,-.10,.42,blue,'Pool')
-difference(spa,slab('Spa hollow',(860,96,961,138),-.01,.65,None,'Pool'))
-slab('Spa water',(860,96,961,138),.28,.29,water,'Pool')
-for a,b in [((851,88),(970,88)),((970,88),(970,145)),((970,145),(851,145)),((851,145),(851,88))]:
-    beam('Spa coping',pt(a,.43),pt(b,.43),.16,coping,'Pool')
-# Suggest paving joints without a heavyweight individual paver array.
-for y in range(90,411,24):
-    # Only left deck strip: never lay joint geometry across the water.
-    beam('Deck paving joint',pt((620,y),.012),pt((668,y),.012),.009,concrete,'Pool')
-
-# Screen enclosure: white aluminum posts, horizontal rails, pitched roof frames.
-x0,x1 = 607,1258
-y0,y1 = 81,410
-cage_eave,cage_ridge = 3.55,4.95
-xm = (x0+x1)/2
-for y in (y0,163,245,327,y1):
-    roofline = [(x0,y,cage_eave),(xm,y,cage_ridge),(x1,y,cage_eave)]
-    for x in (x0,x1):
-        beam('Screen cage upright',pt((x,y),.03),pt((x,y),cage_eave),.055,trim,'Enclosure')
-    for a,b in zip(roofline,roofline[1:]):
-        beam('Screen roof rib',pt(a[:2],a[2]),pt(b[:2],b[2]),.055,trim,'Enclosure')
-for x in (x0,(x0+xm)/2,xm,(xm+x1)/2,x1):
-    z = cage_eave+(cage_ridge-cage_eave)*(1-abs(x-xm)/(xm-x0))
-    beam('Screen roof purlin',pt((x,y0),z),pt((x,y1),z),.045,trim,'Enclosure')
-for a,b in [((x0,y0),(x1,y0)),((x1,y0),(x1,y1)),((x0,y0),(x0,y1))]:
-    for z in (.09,1.12,2.35,cage_eave):
-        beam('Screen horizontal rail',pt(a,z),pt(b,z),.045,trim,'Enclosure')
-    if MAKE_SCREEN_MESH:
-        mesh('Fine transparent screen',[pt(a,.04),pt(b,.04),pt(b,cage_eave),pt(a,cage_eave)],[(0,1,2,3)],screen,'Enclosure')
-for x in (735,866,996,1127):
-    beam('Rear screen upright',pt((x,y0),.03),pt((x,y0),cage_eave),.055,trim,'Enclosure')
-if MAKE_SCREEN_MESH:
-    for a,b in [(x0,xm),(xm,x1)]:
-        za = cage_ridge if a==xm else cage_eave
-        zb = cage_ridge if b==xm else cage_eave
-        mesh('Roof insect screen',[pt((a,y0),za),pt((b,y0),zb),pt((b,y1),zb),pt((a,y1),za)],[(0,1,2,3)],screen,'Enclosure')
-    mesh('Screen gable',[pt((x0,y0),cage_eave),pt((x1,y0),cage_eave),pt((xm,y0),cage_ridge)],[(0,1,2)],screen,'Enclosure')
-
-# Driveway side apron and front walkway, approximate because plan omits site.
-prism('Side entry driveway',[(-310,780),(148,780),(148,1068),(174,1068),
-                            (174,1300),(-20,1530),(-310,1530)],-.12,-.045,concrete,'Site')
-prism('Front walk',[(714,1080),(817,1080),(817,1130),(735,1210),
-                    (665,1280),(560,1350),(270,1410),(252,1370),
-                    (526,1305),(632,1230),(704,1160)],-.10,-.025,concrete,'Site')
-# Driveway control joints.
-for y in (910,1090,1270,1450):
-    beam('Driveway control joint',pt((-310,y),-.039),pt((130,y),-.039),.014,shadow,'Site')
-
-# -------------------------- presentation --------------------------
-scene = bpy.context.scene
-scene.unit_settings.system = 'METRIC'
-scene.unit_settings.length_unit = 'METERS'
-scene.render.engine = 'CYCLES'
-scene.cycles.samples = 48
-scene.cycles.use_denoising = True
-scene.render.resolution_x = 1600
-scene.render.resolution_y = 1100
-scene.render.resolution_percentage = 100
-scene.world = bpy.data.worlds.new(PREFIX+'_Daylight')
-scene.world.use_nodes = True
-scene.world.node_tree.nodes['Background'].inputs[0].default_value = (.68,.79,1,1)
-scene.world.node_tree.nodes['Background'].inputs[1].default_value = .45
-sun_data = bpy.data.lights.new(PREFIX+'_Sun','SUN'); sun_data.energy=2.6
-sun_data.angle=math.radians(10)
-sun = bpy.data.objects.new('Afternoon sun',sun_data); groups['Cameras'].objects.link(sun)
-sun.rotation_euler = (math.radians(28),math.radians(-24),math.radians(-38))
-
-
-def camera(name,location,target,lens=42):
-    data = bpy.data.cameras.new(PREFIX+'_'+name)
-    ob = bpy.data.objects.new(name,data); groups['Cameras'].objects.link(ob)
-    ob.location=location
-    ob.rotation_euler=(Vector(target)-ob.location).to_track_quat('-Z','Y').to_euler()
-    data.lens=lens; data.clip_end=500
-    return ob
-
-
-scene.camera=camera('Front exterior',(-1,-30,6.0),(0,4,1.7),40)
-camera('Driveway exterior',(-28,-12,5.2),(-6,5,1.8),43)
-camera('Pool exterior',(9,22,2.6),(0,9,1.3),22)
-camera('Aerial overview',(-30,-30,35),(0,9,0),43)
-plan_cam=camera('Plan verification',(0,9,45),(0,9,0),45)
-plan_cam.data.type='ORTHO'; plan_cam.data.ortho_scale=30
-# Add project metadata inside the blend; makes assumptions visible later.
-root['reference_scale_m_per_pixel']=SCALE
-root['accuracy']='Manually traced plan; photo-estimated elevations, roof and site. Not surveyed.'
-root['orientation']='Front is -Y; garage driveway is -X; pool is +Y.'
-root['roof_note']='Editable overlapping hip components; not a watertight construction roof.'
-for screen_ui in bpy.data.screens:
-    for area in screen_ui.areas:
-        if area.type=='VIEW_3D':
-            area.spaces.active.clip_end=500
-            area.spaces.active.region_3d.view_distance=40
-            area.spaces.active.region_3d.view_location=(0,8,1.5)
-bpy.ops.object.select_all(action='DESELECT')
-print('4690 exterior generated. Cameras: Front / Driveway / Pool / Aerial / Plan verification.')
-print('No .blend file saved automatically. Save As to preserve the generated model.')
+# House geometry only: no site, pool, cameras, lights, or presentation setup.
