@@ -326,4 +326,90 @@ mesh('Straight recess bench between angled walls',seat_verts,seat_faces,plaster)
 
 # Dry pool: remove the water object, preserving the basin and solid details.
 bpy.data.objects.remove(pool_water,do_unlink=True)
-print('P4690 dry pool with straight recess bench created; H4690 unchanged.')
+# Photo-inspired stepped waterfall on the deck at the back-right clipped
+# corner: plan edge (1128,147)-(1163,179). No spa or pool partition.
+# Dimensions are visual estimates; this does not alter the basin outline.
+MAKE_WATERFALL_FLOW = False  # Keep the requested dry model by default.
+
+def stepped_waterfall():
+    a,b = pool[3],pool[4]
+    center = (a+b)/2
+    tangent = (b-a).normalized()
+    outward = Vector((-tangent.y,tangent.x))
+    corner_length = (b-a).length
+    before_length = (pool[3]-pool[2]).length
+    after_length = (pool[5]-pool[4]).length
+    def point(x,y):
+        return center+tangent*x+outward*y
+    def footprint(x0,x1,y0,y1):
+        return [point(x0,y0),point(x1,y0),point(x1,y1),point(x0,y1)]
+    def block(label,x0,x1,y0,y1,z0,z1,mat):
+        return prism('Waterfall '+label,footprint(x0,x1,y0,y1),z0,z1,mat)
+
+    def along_wall(s,distance):
+        # s follows the actual perimeter: long wall -> diagonal -> end wall.
+        # Offsets use the same mitered corners as the pool coping.
+        loop = pool if distance == 0 else offset(pool,distance)
+        if s < 0:
+            t = (s+before_length)/before_length
+            return loop[2]+(loop[3]-loop[2])*t
+        if s <= corner_length:
+            return loop[3]+(loop[4]-loop[3])*(s/corner_length)
+        return loop[4]+(loop[5]-loop[4])*((s-corner_length)/after_length)
+
+    def wall_strip(start,end,depth):
+        stations = [start]+[s for s in (0,corner_length) if start < s < end]+[end]
+        # Inner face is EXACTLY on the pool wall, not set back on the deck.
+        # Every tier extends outward only; no change to the water opening.
+        return ([along_wall(s,0) for s in stations]+
+                [along_wall(s,depth) for s in reversed(stations)])
+
+    # High central tier bends around both ends of the clipped corner.
+    # Lower wings continue along the two adjoining pool walls, hugging them.
+    tiers = [('center',-.18,corner_length+.18,.78,.46),
+             ('left wing',-1.10,-.18,.65,.25),
+             ('right wing',corner_length+.18,corner_length+1.10,.65,.25),
+             ('left outer step',-1.65,-1.10,.48,.12),
+             ('right outer step',corner_length+1.10,corner_length+1.65,.48,.12)]
+    for label,start,end,depth,height in tiers:
+        poly = wall_strip(start,end,depth)
+        prism('Waterfall '+label+' wall-aligned masonry',poly,DECK_Z,height,grout)
+        tile_band('Waterfall '+label+' blue mosaic',poly,DECK_Z,height,False)
+        # Caps follow the identical bent outline without bridging the pool.
+        prism('Waterfall '+label+' fitted pale cap',poly,height,height+.04,coping)
+
+    # Outlet lies on the diagonal pool-wall plane; lip projects into basin.
+    outlet = material('Waterfall outlet shadow',(.025,.055,.06),.45)
+    block('spillway mouth',-.22,.22,-.022,-.010,.375,.435,outlet)
+    block('spillway lip',-.25,.25,-.17,.025,.355,.375,coping)
+    for x0,x1 in [(-.28,-.25),(.25,.28)]:
+        block('spillway cheek',x0,x1,-.17,.025,.355,.415,tiles[1])
+
+    if MAKE_WATERFALL_FLOW:
+        # Optional static ribbon, not a fluid simulation or pool surface.
+        # In a dry basin the ribbon falls to the floor, not an invisible
+        # water plane. Disabled unless explicitly wanted for presentation.
+        end = point(0,-.31)
+        end_z = floor_z(end)+.025
+        verts,faces = [],[]
+        sections = 24
+        for i in range(sections+1):
+            t = i/sections
+            y = -.17-.14*t
+            z = .383+(end_z-.383)*t*t
+            half_width = .22+.025*t
+            for side in (-1,1):
+                p = point(side*half_width,y)
+                verts.append((p.x,p.y,z))
+        for i in range(sections):
+            k = i*2
+            faces.append((k,k+1,k+3,k+2))
+        flow = mesh('Waterfall optional flowing ribbon',verts,faces,water)
+        solid = flow.modifiers.new('Thin water sheet','SOLIDIFY')
+        solid.thickness = .008
+        for polygon in flow.data.polygons:
+            polygon.use_smooth = True
+
+
+stepped_waterfall()
+print('P4690 dry pool, straight bench and stepped waterfall created; H4690 unchanged.')
