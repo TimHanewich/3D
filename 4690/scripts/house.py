@@ -361,6 +361,8 @@ for p,w in [((1257,460),1.20),((1200,414),1.40)]:
 # Large rear sliding glass openings on the lanai.
 opening('Family room pool slider',(607,322),2.44,.035,2.62,0,True)
 opening('Living room pool slider',(850,540),3.50,.035,2.62,0,True)
+# Matching glass doors in the angled wall between the living and family sliders.
+opening('Angled family pool doors',(659.5,490),1.75,.035,2.62,0,True)
 opening('Angled master pool door',(1038,475),1.75,.035,2.62,0,True)
 
 
