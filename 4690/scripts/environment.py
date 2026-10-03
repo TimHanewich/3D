@@ -47,10 +47,12 @@ HOOP_POSITION = (-17.55, 1.25)  # Planted west edge, facing into driveway (+X).
 HOOP_RIM_HEIGHT = 3.05          # Visual reconstruction, not measured equipment.
 MAKE_PLANTING_MOUND = True
 PLANTING_MOUND_HEIGHT = .34    # Raised tree/shrub island ONLY; driveway stays flat.
-PLANTING_MOUND_CENTER = (-9.8, -11.0)  # Existing front-left oak island.
+FRONT_LEFT_TREE_POSITION = (-3.5, -11.0)  # Estimated from marked viewport.
+FRONT_RIGHT_TREE_POSITION = (5.8, -10.5)
+PLANTING_MOUND_CENTER = FRONT_LEFT_TREE_POSITION  # Move the planted bank too.
 PLANTING_MOUND_RADII = (2.10, 2.65)    # Local planted bank, not the approach.
 MAKE_STOP_SIGN = True
-STOP_SIGN_POSITION = (-11.85, -14.35)  # Grass verge beside driveway entrance.
+STOP_SIGN_POSITION = (-19.95, -14.35)  # Opposite (west) verge of driveway entrance.
 FOLIAGE_DENSITY = 1.0   # .5 for lighter geometry; 1.5 for fuller crowns.
 rng = random.Random(SEED)
 
@@ -361,8 +363,8 @@ bed('Rear west shade border',[(-18.6,18.5),(-13.6,18.0),(-10.9,20.2),
 def ellipse_bed(name,x,y,rx,ry):
     return bed(name,[(x+rx*math.cos(i*math.tau/24),y+ry*math.sin(i*math.tau/24))
                      for i in range(24)])
-ellipse_bed('Front left oak mulch island',-9.8,-11.0,2.35,2.25)
-ellipse_bed('Front right oak mulch island',12.6,-9.0,1.8,1.55)
+ellipse_bed('Front left oak mulch island',*FRONT_LEFT_TREE_POSITION,2.35,2.25)
+ellipse_bed('Front right oak mulch island',*FRONT_RIGHT_TREE_POSITION,1.8,1.55)
 
 
 def inside(p, polygon):
@@ -537,8 +539,8 @@ if MAKE_PALMS:
                  ('Rear right palm',14.35,19.9,6.0,2.6,(.2,.15))]:
         palm(*spec)
 if MAKE_TREES:
-    oak('Front west shade oak',-9.8,-11.0,10.0,4.6)
-    oak('Front east shade oak',12.6,-9.0,9.2,4.3)
+    oak('Front west shade oak',*FRONT_LEFT_TREE_POSITION,10.0,4.6)
+    oak('Front east shade oak',*FRONT_RIGHT_TREE_POSITION,9.2,4.3)
     oak('Rear west shade oak',-14.7,22.5,10.5,4.9)
 
 if MAKE_SMALL_PLANTS:
@@ -674,12 +676,15 @@ def shape_front_planting():
     # Move the existing oak as one rigid assembly onto its planted bank.
     for ob in groups['Trees'].objects:
         if ob.name.startswith(PREFIX+'_Front west shade oak'):
-            ob.location.z += planting_rise(-9.8,-11.0)
+            ob.location.z += planting_rise(*FRONT_LEFT_TREE_POSITION)
     # Understory shrubbery on this specific island, as shown in the photo.
     # Each complete plant is seated at its own ground height, not distorted.
     if MAKE_SMALL_PLANTS:
         for i,(x,y) in enumerate([(-10.75,-11.45),(-9.75,-12.15),
                                   (-8.75,-11.65),(-8.65,-10.6),(-10.0,-9.8)]):
+            # Preserve the original shrub offsets within the moved tree island.
+            x += FRONT_LEFT_TREE_POSITION[0]-(-9.8)
+            y += FRONT_LEFT_TREE_POSITION[1]-(-11.0)
             before = set(groups['Shrubs'].objects)
             shrub('Raised street-end island shrub %02d'%i,x,y,.58,.95)
             for ob in set(groups['Shrubs'].objects)-before:
@@ -772,10 +777,10 @@ def street_stop_sign():
     red = material('Stop sign red face',(.62,.018,.020),roughness=.43)
     white = material('Stop sign white border and letters',(.95,.94,.87),roughness=.45)
     postmat = material('Street sign dark painted post',(.035,.045,.039),roughness=.5)
-    # Face west along the modeled street, rather than toward the front door.
-    # Local u runs -Y, outward depth runs -X, Z is vertical.
+    # Turned 180 degrees: STOP now faces east, opposite its former direction.
+    # Local u runs +Y, outward depth runs +X, Z is vertical.
     def q(u,depth,z):
-        return Vector((sx-depth,sy-u,base_z+z))
+        return Vector((sx+depth,sy+u,base_z+z))
     def member(label,a,b,r=.03,mat=postmat):
         return tube('Street sign '+label,[q(*a),q(*b)],r,mat,'Details',10)
     member('round dark post',(0,-.07,0),(0,-.07,3.16),.037)
@@ -805,7 +810,7 @@ def street_stop_sign():
     ob = bpy.data.objects.new(PREFIX+'_Street sign STOP',text)
     groups['Details'].objects.link(ob)
     ob.location = q(0,.010,center_z)
-    ob.rotation_euler = (math.pi/2,0,-math.pi/2)
+    ob.rotation_euler = (math.pi/2,0,math.pi/2)
     text.materials.append(white)
     # Slim street-name blade above, as visible in the reference. No invented
     # second street name; lettering is on both sides of this one blade.
@@ -820,7 +825,7 @@ def street_stop_sign():
         obj = bpy.data.objects.new(PREFIX+'_Street name lettering',label)
         groups['Details'].objects.link(obj)
         obj.location = q(0,-.055 if front else -.085,2.98)
-        obj.rotation_euler = (math.pi/2,0,-math.pi/2 if front else math.pi/2)
+        obj.rotation_euler = (math.pi/2,0,math.pi/2 if front else -math.pi/2)
         label.materials.append(white)
     root['Street sign reference'] = 'Estimated verge location; decorative model, not traffic engineering'
 
