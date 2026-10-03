@@ -649,8 +649,41 @@ def front_balustrades():
 
 
 front_balustrades()
-# Quoin-like corner blocks seen on the garage wing.
-for x,y in [(186,1240),(524,1240),(160,216),(1257,414)]:
+# Broad, shallow corner courses on the front garage wing, photo-inspired.
+# Each course is one L-shaped piece wrapping both exterior wall faces.
+# Six almost-continuous courses replace the small widely spaced tabs.
+def front_corner_blocks():
+    courses = 6
+    bottom,top = .025,WALL_HEIGHT
+    pitch = (top-bottom)/courses
+    joint = .018
+    wall_face = -WALL_THICKNESS/2
+    outside = wall_face-.035
+    inside = wall_face+.008   # Slight embed into stucco; no floating trim.
+    reach = .52
+    profile = [(outside,outside),(reach,outside),(reach,inside),
+               (inside,inside),(inside,reach),(outside,reach)]
+    for x,y,side,label in [(186,1240,1,'Left'),(524,1240,-1,'Right')]:
+        base = Vector(pt((x,y)))
+        for row in range(courses):
+            z0 = bottom+row*pitch+joint/2
+            z1 = bottom+(row+1)*pitch-joint/2
+            verts = [(base.x+side*u,base.y+v,z)
+                     for z in (z0,z1) for u,v in profile]
+            count = len(profile)
+            faces = [tuple(reversed(range(count))),tuple(range(count,2*count))]
+            faces += [(i,(i+1)%count,(i+1)%count+count,i+count)
+                      for i in range(count)]
+            ob = mesh(label+' front wraparound corner block %02d' % (row+1),
+                      verts,faces,trim,'Trim')
+            bevel = ob.modifiers.new('Soft cast-stucco edges','BEVEL')
+            bevel.width = .005
+            bevel.segments = 2
+
+
+front_corner_blocks()
+# Other corner details are unchanged in this front-elevation pass.
+for x,y in [(160,216),(1257,414)]:
     for z in (.36,.85,1.34,1.83,2.32,2.81):
         box('Corner stucco quoin',pt((x,y),z),(.38,.37,.22),trim,'Trim')
 
