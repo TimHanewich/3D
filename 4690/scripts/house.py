@@ -34,7 +34,8 @@ ROOF_OVERHANG_PX = 24
 MAKE_ROOF_TILES = True
 INCLUDE_POOL_BATH = True
 MAKE_INTERIOR = True
-MAKE_INTERIOR_FURNITURE = True
+MAKE_INTERIOR_FURNITURE = False  # Loose furnishings outside the kitchen.
+MAKE_KITCHEN_FURNITURE = True    # Preserve the kitchen stools independently.
 MAKE_INTERIOR_CEILINGS = False  # Leave off for an unobstructed top-down inspection.
 INTERIOR_CUTAWAY = False      # Hide roofs/ceilings in viewport only, not renders.
 INTERIOR_WALL_THICKNESS = .115
@@ -1416,7 +1417,7 @@ def build_interior():
             oval('Kitchen canister lid',(x,718),.07,.07,
                  [(.946+h,1),(.963+h,1)],white)
 
-        if MAKE_INTERIOR_FURNITURE:
+        if MAKE_KITCHEN_FURNITURE:
             group = 'Interior furniture'
             for y in (558,597,636):
                 center = Vector(pt((619,y),fz))
