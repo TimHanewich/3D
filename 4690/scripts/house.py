@@ -804,7 +804,8 @@ def build_interior():
 
     def partition(name, a, b, openings=()):
         # Each opening: (distance from a in IMAGE PIXELS, width in pixels,
-        # 'door'/'closet'/'open'). Door leaves are shown ajar for circulation.
+        # 'door'/'closet'/'open'/'passage'). 'passage' retains door-height
+        # casing without a leaf; 'open' is a taller untrimmed opening.
         av,bv = Vector(a),Vector(b)
         length = (bv-av).length
         direction = (bv-av)/length
@@ -856,7 +857,7 @@ def build_interior():
                         handle = hinge+leaf_u*(clear-.10)+Vector((0,0,1.0))
                         beam(name+' lever',handle+normal*.045,
                              handle+normal*.045-leaf_u*.10,.018,metal,'Interior doors')
-                else:
+                elif kind == 'closet':
                     # Bifolds parked at each jamb rather than blocking access.
                     for side,v in [(1,left),(-1,right)]:
                         for k in range(2):
@@ -871,17 +872,17 @@ def build_interior():
     # West bedroom wing: ONE kitchen-side entrance at plan y=500..548.
     # The short passage serves the shared bath straight ahead and the two
     # bedrooms on opposite sides; neither bedroom opens into the kitchen.
-    # Reverse the wall direction so this leaf swings into the passage.
+    # Cased openings retain door heights and trim, without leaves or handles.
     partition('Bedroom wing east wall',(367,730),(367,224),
-              [(182,48,'door')])
+              [(182,48,'passage')])
     partition('Bedroom 3 passage entrance',(320,431),(367,431),
-              [(4,39,'door')])
+              [(4,39,'passage')])
     partition('Bedroom 2 passage entrance',(367,548),(320,548),
-              [(4,39,'door')])
+              [(4,39,'passage')])
     partition('Bedroom 3 closet front',(160,400),(315,400),[(30,96,'closet')])
     partition('Bedroom 3 closet back',(160,431),(320,431))
     partition('Bedroom 3 closet end',(315,400),(315,431))
-    partition('Shared bathroom east wall',(320,431),(320,548),[(43,43,'door')])
+    partition('Shared bathroom east wall',(320,431),(320,548),[(43,43,'passage')])
     partition('Shared bathroom south wall',(160,548),(320,548))
     partition('Shared bath linen cupboard',(250,504),(320,504),[(12,45,'closet')])
     partition('Shared bath linen divider',(250,504),(250,548))
