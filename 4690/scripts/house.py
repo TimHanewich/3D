@@ -915,14 +915,25 @@ def build_interior():
     partition('Master bath approach',(1085,704),(1085,796))
     partition('Dining west wall',(524,788),(524,990))
     partition('Dining north return',(524,788),(597,788))
-    partition('Dining diagonal opening',(641,788),(708,848),[(3,83,'open')])
+    # Full-span opening: no isolated 3px pier at its free north end.
+    dining_opening_length = math.hypot(708-641,848-788)
+    partition('Dining diagonal opening',(641,788),(708,848),
+              [(0,dining_opening_length,'open')])
     partition('Dining entry return',(708,848),(708,902))
-    partition('Study diagonal entrance',(836,848),(900,796),[(9,55,'door')])
+    # Join the diagonal entrance to the existing exterior west wall.
+    partition('Study west entry return',(836,848),(836,902))
+    # Reversed endpoints hinge the leaf at the north jamb and swing it
+    # into the study, away from the gallery and the closet at x=934.
+    partition('Study diagonal entrance',(900,796),(836,848),[(9,55,'door')])
     partition('Study closet north',(900,796),(1032,796))
     partition('Master bath north return',(1032,796),(1085,796))
     partition('Study closet front',(934,827),(1032,827),[(10,78,'closet')])
     partition('Study closet side',(934,796),(934,827))
-    partition('Study to master bath',(1032,796),(1032,1020))
+    # Connecting door at y=954..998, below the linen cupboard ending
+    # at y=948 and above the toilet-room partition at y=1005.
+    # Build a real opening with jambs/header; the leaf swings into the bath.
+    partition('Study to master bath',(1032,796),(1032,1020),
+              [(158,44,'door')])
     partition('Master closet north',(1162,742),(1257,742))
     partition('Master closet upper return',(1162,742),(1162,774))
     partition('Master closet upper diagonal',(1162,774),(1198,805))
@@ -936,6 +947,9 @@ def build_interior():
     partition('Master toilet room east',(1085,1005),(1085,1080),[(9,44,'door')])
     if INCLUDE_POOL_BATH:
         partition('Pool bathroom south',(300,224),(446,224),[(8,46,'door')])
+        # Close the missing east return between the exterior corner and
+        # the south partition, beside (not in front of) the vanity.
+        partition('Pool bathroom east return',(446,188),(446,224))
         # No partition at y=190: it blocked the front of the vanity.
         # The existing south wall at y=224 remains behind the sink.
 
