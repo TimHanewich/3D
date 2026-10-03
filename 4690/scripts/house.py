@@ -663,7 +663,10 @@ def front_corner_blocks():
     reach = .52
     profile = [(outside,outside),(reach,outside),(reach,inside),
                (inside,inside),(inside,reach),(outside,reach)]
-    for x,y,side,label in [(186,1240,1,'Left'),(524,1240,-1,'Right')]:
+    # Garage corners plus the two outer corners flanking the bath gable.
+    for x,y,side,label in [(186,1240,1,'Left'),(524,1240,-1,'Right'),
+                           (1032,1080,1,'Gable flank left'),
+                           (1255,1082,-1,'Gable flank right')]:
         base = Vector(pt((x,y)))
         for row in range(courses):
             z0 = bottom+row*pitch+joint/2
