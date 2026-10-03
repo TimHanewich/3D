@@ -954,8 +954,9 @@ def build_interior():
     partition('Master closet lower diagonal',(1198,895),(1162,924))
     partition('Master closet lower return',(1162,924),(1162,956))
     partition('Master closet south',(1162,956),(1280,956))
-    # Photo correction: full-height wall return at the end of the vanity,
-    # not an accessible linen closet. Preserve the passage to its east.
+    # Full-height linen closet at the vanity end: solid north/vanity face
+    # with medicine cabinet, and open south face toward the tub/toilet area.
+    # Preserve its footprint and the passage to its east.
     master_vanity_return = rect('Master vanity end wall',
                                (1032,921,1085,948),fz,WALL_HEIGHT,
                                paint,'Interior walls')
@@ -964,6 +965,23 @@ def build_interior():
                            (1045.5,919,1068.5,927),1.17,1.89,None,
                            'Interior cabinetry')
     difference(master_vanity_return,medicine_recess)
+    # Hollow the closet through its SOUTH face only. The cavity starts
+    # behind the medicine recess (ends y=927), leaving a solid separator.
+    linen_opening_top = fz+INTERIOR_DOOR_HEIGHT
+    linen_cavity = rect('Master linen closet cavity cutter',
+                        (1039,930,1078,950),fz-.02,linen_opening_top,
+                        None,'Interior cabinetry')
+    difference(master_vanity_return,linen_cavity)
+    # Casing surrounds the open face; no door, threshold, or cross rail.
+    for x in (1039,1078):
+        beam('Master linen closet south jamb',pt((x,948.7),fz),
+             pt((x,948.7),linen_opening_top),.04,trim,'Interior doors')
+    beam('Master linen closet south head',pt((1039,948.7),linen_opening_top),
+         pt((1078,948.7),linen_opening_top),.04,trim,'Interior doors')
+    for z in (.35,.70,1.05,1.40,1.75):
+        rect('Master linen closet shelf',(1039,930,1078,946.5),
+             z,z+.025,cabinet)
+    assert 930 > 927  # Closet cavity must not break into medicine cabinet.
     for z0,z1,width in [(fz,fz+.105,.018),(.97,1.01,.025)]:
         segment('Master vanity return front trim',(1035,920.5),(1085,920.5),
                 z0,z1,width,trim,'Interior walls')
