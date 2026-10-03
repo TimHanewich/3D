@@ -310,4 +310,20 @@ if MAKE_SPA:
     prism('Spa spillover water sheet',sheet,WATER_Z,.29,water)
 
 # All geometry is contained in P4690 and uses the house's original origin.
-print('P4690 pool created: approximately 30 x 14.3 ft; H4690 unchanged.')
+# Straight bench across the top recess, between the two angled walls.
+bench_front_y = 135
+bench_t = (bench_front_y-119)/(147-119)
+bench_left_x = 715+(684-715)*bench_t
+bench_right_x = 810+(840-810)*bench_t
+recess_seat = world([(715,119),(810,119),
+                     (bench_right_x,bench_front_y),(bench_left_x,bench_front_y)])
+seat_z = -.58
+seat_verts = ([(p.x,p.y,floor_z(p)-.02) for p in recess_seat]+
+              [(p.x,p.y,seat_z) for p in recess_seat])
+seat_faces = [(3,2,1,0),(4,5,6,7),(0,1,5,4),
+              (1,2,6,5),(2,3,7,6),(3,0,4,7)]
+mesh('Straight recess bench between angled walls',seat_verts,seat_faces,plaster)
+
+# Dry pool: remove the water object, preserving the basin and solid details.
+bpy.data.objects.remove(pool_water,do_unlink=True)
+print('P4690 dry pool with straight recess bench created; H4690 unchanged.')
