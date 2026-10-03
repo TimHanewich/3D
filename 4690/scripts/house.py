@@ -954,8 +954,21 @@ def build_interior():
     partition('Master closet lower diagonal',(1198,895),(1162,924))
     partition('Master closet lower return',(1162,924),(1162,956))
     partition('Master closet south',(1162,956),(1280,956))
-    # No floor-standing linen closet beside the master vanity.
-    # A shallow wall-mounted medicine cabinet is built below instead.
+    # Photo correction: full-height wall return at the end of the vanity,
+    # not an accessible linen closet. Preserve the passage to its east.
+    master_vanity_return = rect('Master vanity end wall',
+                               (1032,921,1085,948),fz,WALL_HEIGHT,
+                               paint,'Interior walls')
+    # Recess a small cabinet into the north face, beside the vanity mirror.
+    medicine_recess = rect('Master medicine cabinet recess cutter',
+                           (1045.5,919,1068.5,927),1.17,1.89,None,
+                           'Interior cabinetry')
+    difference(master_vanity_return,medicine_recess)
+    for z0,z1,width in [(fz,fz+.105,.018),(.97,1.01,.025)]:
+        segment('Master vanity return front trim',(1035,920.5),(1085,920.5),
+                z0,z1,width,trim,'Interior walls')
+        segment('Master vanity return end trim',(1085.5,921),(1085.5,948),
+                z0,z1,width,trim,'Interior walls')
     partition('Master toilet room north',(1032,1005),(1085,1005))
     partition('Master toilet room east',(1085,1005),(1085,1080),[(9,44,'door')])
     if INCLUDE_POOL_BATH:
@@ -1672,20 +1685,28 @@ def build_interior():
     closet('Bedroom 2 wardrobe',(169,735,293,751))
     closet('Study storage',(940,802,1025,821))
     closet('Shared bath linen',(256,526,313,541),(.35,.70,1.05,1.40,1.75))
-    # Small medicine cabinet on the vanity wall; dimensions estimated
-    # from the written description, not a floor-to-ceiling enclosure.
-    med_back = 1032+thick/(2*SCALE)
-    med_front = med_back+.12/SCALE
-    rect('Master medicine cabinet body',(med_back,925,med_front,947),
-         1.18,1.88,cabinet)
-    rect('Master medicine cabinet mirror',
-         (med_front,926,med_front+.3,946),1.21,1.85,metal)
-    for y in (925,947):
-        beam('Master medicine cabinet side trim',pt((med_front,y),1.18),
-             pt((med_front,y),1.88),.025,trim,'Interior cabinetry')
+    # Small recessed white-panel medicine cabinet, as in the supplied photo.
+    # It faces north from the restored return, not east from the vanity wall.
+    med_white = material('Medicine cabinet white enamel',(.94,.93,.88),.38)
+    rect('Master medicine cabinet back',(1046,926,1068,927),
+         1.18,1.88,med_white)
+    for x0,x1 in ((1046,1047),(1067,1068)):
+        rect('Master medicine cabinet side',(x0,921,x1,926),
+             1.18,1.88,med_white)
+    for z in (1.18,1.42,1.65,1.86):
+        rect('Master medicine cabinet shelf',(1047,921.5,1067,926),
+             z,z+.02,med_white)
+    # Only the frame projects from the wall; the cabinet body is recessed.
+    rect('Master medicine cabinet white panel',(1046,920.5,1068,921.3),
+         1.19,1.87,med_white)
+    for x in (1046,1068):
+        beam('Master medicine cabinet side trim',pt((x,920.1),1.18),
+             pt((x,920.1),1.88),.03,med_white,'Interior cabinetry')
     for z in (1.18,1.88):
-        beam('Master medicine cabinet horizontal trim',pt((med_front,925),z),
-             pt((med_front,947),z),.025,trim,'Interior cabinetry')
+        beam('Master medicine cabinet horizontal trim',pt((1046,920.1),z),
+             pt((1068,920.1),z),.03,med_white,'Interior cabinetry')
+    rect('Master medicine cabinet inset panel',(1048,920.15,1066,920.5),
+         1.23,1.83,cabinet)
     closet('Master walk-in north shelving',(1170,749,1245,773))
     closet('Master walk-in south shelving',(1170,927,1269,949))
     for z in (.36,.72,1.08,1.44,1.80):
