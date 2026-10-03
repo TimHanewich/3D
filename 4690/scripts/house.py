@@ -322,7 +322,8 @@ for p,w,z in [((160,250),.80,.85),((160,474),.64,1.40),((160,633),1.20,.76),
     opening('West elevation window',p,w,z,2.36,0)
 def pool_bath_door():
     # Pool-facing side of the bath projection: wall (446,84)-(446,188).
-    p = (446,136)
+    # Keep the entire doorway south of the shower enclosure (ends y=124).
+    p = (446,158)
     name = 'Pool bath exterior door'
     width, bottom, top = .96, .035, 2.20
     wall,u2 = nearest_wall(p)
@@ -934,7 +935,8 @@ def build_interior():
     partition('Master toilet room east',(1085,1005),(1085,1080),[(9,44,'door')])
     if INCLUDE_POOL_BATH:
         partition('Pool bathroom south',(300,224),(446,224),[(8,46,'door')])
-        partition('Pool bathroom vanity return',(362,190),(446,190))
+        # No partition at y=190: it blocked the front of the vanity.
+        # The existing south wall at y=224 remains behind the sink.
 
     # Continuous finish, with room-specific inserts; all inserts share a level.
     prism('Interior continuous oak finish',outline,.002,INTERIOR_FLOOR_Z,wood,
@@ -1452,7 +1454,10 @@ def build_interior():
     for x in (235,291):
         sink('Shared bath basin',shared,(x,451),.86,.205,.17)
         rect('Shared bath mirror',(x-12,434,x+12,435),1.04,2.08,metal,'Interior fixtures')
-    toilet('Shared bath toilet',(190,468))
+    # Tank rear is 23 plan pixels behind the bowl center. Place that
+    # rear face against the bathroom side of the y=431 partition.
+    shared_toilet_y = 431 + thick/(2*SCALE) + 23
+    toilet('Shared bath toilet',(190,shared_toilet_y))
     tub('Shared bath tub',(167,505,245,542))
     master = worktop('Master double vanity',(1037,801,1073,921),.86)
     for y in (826,895):
@@ -1465,7 +1470,50 @@ def build_interior():
         pooltop = worktop('Pool bath vanity',(365,194,438,220),.86)
         sink('Pool bath basin',pooltop,(402,207),.86)
         toilet('Pool bath toilet',(329,119))
-        shower('Pool bath shower',(357,90,439,124))
+        # Dedicated pool enclosure; do not alter the master shower.
+        # North wall is tiled, both ends are glazed, and the south-facing
+        # sliding panel is parked behind the fixed panel on the right.
+        # All panels share the tray footprint and meet continuous framing.
+        sg = 'Interior fixtures'
+        a,b,c,d = 357,90,439,124
+        mid = (a+c)/2
+        sill,head = fz+.09,2.13
+        rect('Pool shower tray',(a,b,c,d),fz,fz+.055,ceramic,sg)
+        rect('Pool shower drain',(mid-2,105,mid+2,109),
+             fz+.055,fz+.058,metal,sg)
+        rect('Pool shower tiled back',(a,89.7,c,90.7),fz,head,tile,sg)
+        for x in (a,c):
+            segment('Pool shower side curb',(x,b),(x,d),fz,sill,.05,ceramic,sg)
+            segment('Pool shower side glass',(x,b+.8),(x,d),
+                    sill,head,.01,shower_glass,sg)
+            for y in (b,d):
+                beam('Pool shower corner post',pt((x,y),sill),
+                     pt((x,y),head),.025,metal,sg)
+            beam('Pool shower side top rail',pt((x,b),head),
+                 pt((x,d),head),.025,metal,sg)
+        segment('Pool shower front curb',(a,d),(c,d),
+                fz,sill,.055,ceramic,sg)
+        for z in (sill,head):
+            beam('Pool shower sliding track',pt((a,d-1),z),
+                 pt((c,d-1),z),.035,metal,sg,.06)
+        segment('Pool shower fixed front glass',(mid,d),(c,d),
+                sill+.02,head-.02,.01,shower_glass,sg)
+        segment('Pool shower parked sliding glass',(mid+.5,d-2),(c-.5,d-2),
+                sill+.02,head-.02,.01,shower_glass,sg)
+        for x,y in ((mid,d),(mid+.5,d-2),(c-.5,d-2)):
+            beam('Pool shower panel edge',pt((x,y),sill+.02),
+                 pt((x,y),head-.02),.016,metal,sg)
+        beam('Pool shower sliding handle',pt((mid+3,d-3),.95),
+             pt((mid+3,d-3),1.18),.022,metal,sg)
+        # Mount fittings to the tiled north wall, not the exterior doorway.
+        beam('Pool shower riser',pt((420,92),1.0),
+             pt((420,92),2.02),.026,metal,sg)
+        beam('Pool shower arm',pt((420,92),2.02),
+             pt((420,105),2.02),.026,metal,sg)
+        box('Pool shower head',pt((420,105),2.00),
+            (.18,.18,.035),metal,sg)
+        box('Pool shower mixer',pt((420,92),1.02),
+            (.10,.045,.10),metal,sg)
 
     # Laundry occupies the service strip between the bedroom and garage.
     for name,bounds in [('Washer',(305,736,338,775)),('Dryer',(345,736,379,775))]:
