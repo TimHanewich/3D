@@ -6,5 +6,3 @@
 - Accent = Witchcraft = (R: 71 G: 76 B: 80 LRV: 7)
 
 ## To Change
-- Recessed ceiling in master bedroom
-- Kitchen Sink should be continuous farmhouse sink. Not too sides
