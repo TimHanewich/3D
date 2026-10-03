@@ -233,8 +233,9 @@ def opening(name, p, width, bottom=.65, spring=2.35, rise=.38, door=False):
     u = Vector((*u2,0)); n = Vector((-u.y,u.x,0)); base = Vector(pt(p))
     def q(x,z,offset):
         return base+u*x+n*offset+Vector((0,0,z))
-    # Trim on both faces avoids dependence on polygon winding.
-    for offset in (-.145,.145):
+    # One centered frame/grid, visible from either side of the opening.
+    # Do not duplicate muntins and fanlight bars on both wall faces.
+    for offset in (0,):
         for i,(x,z) in enumerate(profile):
             xx,zz = profile[(i+1)%len(profile)]
             beam(name+' surround',q(x,z,offset),q(xx,zz,offset),.075)
@@ -307,9 +308,12 @@ def double_entry(p, width=1.74, bottom=.055, spring=2.22, rise=.54):
             beam(name+' surround',q(x,z,offset),q(xx,zz,offset),.085)
         beam(name+' transom rail',q(-width/2,spring,offset),
              q(width/2,spring,offset),.09)
-        for angle in (math.pi/4,math.pi/2,3*math.pi/4):
-            beam(name+' fanlight spoke',q(0,spring,offset),
-                 q(width/2*math.cos(angle),spring+rise*math.sin(angle),offset),.025)
+    # A single fanlight grid; retain the doorway casing on both faces.
+    beam(name+' fanlight base rail',q(-width/2,spring,0),
+         q(width/2,spring,0),.09)
+    for angle in (math.pi/4,math.pi/2,3*math.pi/4):
+        beam(name+' fanlight spoke',q(0,spring,0),
+             q(width/2*math.cos(angle),spring+rise*math.sin(angle),0),.025)
     facade_prism(name+' threshold',p,u2,
                  rectangle(-width/2,width/2,.035,bottom+.012),.30,0,coping)
 
