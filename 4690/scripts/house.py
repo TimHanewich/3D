@@ -708,10 +708,10 @@ def front_balustrades():
 
 
 front_balustrades()
-# Broad, shallow corner courses on the front garage wing, photo-inspired.
+# Broad, shallow corner courses, matching the front and rear elevations.
 # Each course is one L-shaped piece wrapping both exterior wall faces.
 # Six almost-continuous courses replace the small widely spaced tabs.
-def front_corner_blocks():
+def house_corner_blocks():
     courses = 6
     bottom,top = .025,WALL_HEIGHT
     pitch = (top-bottom)/courses
@@ -719,35 +719,33 @@ def front_corner_blocks():
     wall_face = -WALL_THICKNESS/2
     outside = wall_face-.035
     inside = wall_face+.008   # Slight embed into stucco; no floating trim.
-    reach = .52
-    profile = [(outside,outside),(reach,outside),(reach,inside),
-               (inside,inside),(inside,reach),(outside,reach)]
-    # Garage corners plus the two outer corners flanking the bath gable.
-    for x,y,side,label in [(186,1240,1,'Left'),(524,1240,-1,'Right'),
-                           (1032,1080,1,'Gable flank left'),
-                           (1255,1082,-1,'Gable flank right')]:
+    # Front corners only; the two rear corners have plain stucco.
+    # sx/sy point into the house on each face.
+    corners = [(186,1240,1,1,.52,.52,'Left front'),
+               (524,1240,-1,1,.52,.52,'Right front'),
+               (1032,1080,1,1,.52,.52,'Gable flank left'),
+               (1255,1082,-1,1,.52,.52,'Gable flank right')]
+    for x,y,sx,sy,reach_u,reach_v,label in corners:
+        profile = [(outside,outside),(reach_u,outside),(reach_u,inside),
+                   (inside,inside),(inside,reach_v),(outside,reach_v)]
         base = Vector(pt((x,y)))
         for row in range(courses):
             z0 = bottom+row*pitch+joint/2
             z1 = bottom+(row+1)*pitch-joint/2
-            verts = [(base.x+side*u,base.y+v,z)
+            verts = [(base.x+sx*u,base.y+sy*v,z)
                      for z in (z0,z1) for u,v in profile]
             count = len(profile)
             faces = [tuple(reversed(range(count))),tuple(range(count,2*count))]
             faces += [(i,(i+1)%count,(i+1)%count+count,i+count)
                       for i in range(count)]
-            ob = mesh(label+' front wraparound corner block %02d' % (row+1),
+            ob = mesh(label+' wraparound corner block %02d' % (row+1),
                       verts,faces,trim,'Trim')
             bevel = ob.modifiers.new('Soft cast-stucco edges','BEVEL')
             bevel.width = .005
             bevel.segments = 2
 
 
-front_corner_blocks()
-# Other corner details are unchanged in this front-elevation pass.
-for x,y in [(160,216),(1257,414)]:
-    for z in (.36,.85,1.34,1.83,2.32,2.81):
-        box('Corner stucco quoin',pt((x,y),z),(.38,.37,.22),trim,'Trim')
+house_corner_blocks()
 
 # -------------------------- roofs --------------------------
 # Roof components remain separately editable. Tiles are suppressed wherever
