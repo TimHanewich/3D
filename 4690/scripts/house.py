@@ -36,7 +36,8 @@ INCLUDE_POOL_BATH = True
 MAKE_INTERIOR = True
 MAKE_INTERIOR_FURNITURE = False  # Loose furnishings outside the kitchen.
 MAKE_KITCHEN_FURNITURE = True    # Preserve the kitchen stools independently.
-MAKE_INTERIOR_CEILINGS = False  # Leave off for an unobstructed top-down inspection.
+MAKE_INTERIOR_CEILINGS = True  # Continuous flat ceiling over the whole footprint.
+MAKE_GLAZING = False         # Frame-only windows, French doors and shower screens.
 INTERIOR_CUTAWAY = False      # Hide roofs/ceilings in viewport only, not renders.
 INTERIOR_WALL_THICKNESS = .115
 INTERIOR_DOOR_HEIGHT = 2.13
@@ -318,6 +319,9 @@ for p in [(264,1240),(447,1240),(610,990),(923,1020)]:
     opening('Front arched window',p,1.12,.68,2.31,.43)
 opening('Far right front arched window',(1140,1110),1.12,.68,2.31,.43)
 double_entry((772,902))
+# Seated master-toilet right side is west: this short exterior wall faces
+# the front porch. Keep the small opening clear of the corner-block trim.
+opening('Master toilet entry-facing window',(1032,1038),.42,1.35,2.05,0)
 # Left elevation bedroom and bath openings, plus front side garage window.
 for p,w,z in [((160,250),.80,.85),((160,474),.64,1.40),((160,633),1.20,.76),
               ((201,216),.94,.83)]:
@@ -1521,7 +1525,7 @@ def build_interior():
                      .055,honey,group)
 
         island_objects.update(set(root.all_objects)-stools_before)
-        island_shift_x = -.40  # Meters toward the west kitchen run.
+        island_shift_x = -.60  # Another .20 m toward the west kitchen run.
         for ob in island_objects:
             ob.location.x += island_shift_x
         root['kitchen_island_shift_x'] = island_shift_x
@@ -1807,8 +1811,12 @@ def build_interior():
         table('Garage workbench',(423,1197),2.40,.66,.91)
 
     if MAKE_INTERIOR_CEILINGS:
-        prism('Interior ceiling slab',outline,WALL_HEIGHT,WALL_HEIGHT+.08,paint,
-              'Interior ceilings')
+        # One level across all rooms, including garage and optional pool bath.
+        # Embed the underside slightly into wall tops to avoid light gaps.
+        ceiling = prism('Interior continuous flat ceiling',outline,
+                        WALL_HEIGHT-.02,WALL_HEIGHT+.06,paint,
+                        'Interior ceilings')
+        ceiling['underside_z'] = WALL_HEIGHT-.02
     root['interior_reference'] = 'User supplied 4690 Deer Creek floorplan, 1440px'
     root['interior_accuracy'] = 'Manual tracing; not construction or survey geometry'
 
@@ -1944,6 +1952,25 @@ prism('Covered lanai roof',lanai,3.03,3.18,roofmat,'Roofs')
 beam('Lanai rear fascia',pt((607,410),3.08),pt((1100,410),3.08),.18)
 for x in (617,1090):
     box('Lanai support',pt((x,420),1.50),(.20,.20,3.00),stucco,'Trim')
+
+# Frame-only mode removes glazing from this generated house only. Do this
+# after assembly so helpers can still position and finish their objects.
+# Opaque mirrors, appliance panels and light lenses are not window glazing.
+if not MAKE_GLAZING:
+    glazing_materials = {glass}
+    clear_shower = bpy.data.materials.get(PREFIX + '_Interior clear shower glass')
+    if clear_shower:
+        glazing_materials.add(clear_shower)
+    removed_glazing = 0
+    for ob in list(root.all_objects):
+        is_glazing = (ob.type == 'MESH' and
+                      any(mat in glazing_materials for mat in ob.data.materials))
+        # A glass-mounted pull would otherwise float inside the empty frame.
+        is_glass_pull = ob.name == 'Pool shower sliding handle'
+        if is_glazing or is_glass_pull:
+            bpy.data.objects.remove(ob, do_unlink=True)
+            removed_glazing += int(is_glazing)
+    root['removed_glazing_meshes'] = removed_glazing
 
 # Optional inspection mode affects generated roof/ceiling collections only.
 # Render visibility, cameras, lights and unrelated scene objects are unchanged.
