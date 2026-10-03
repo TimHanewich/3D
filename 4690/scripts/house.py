@@ -358,12 +358,95 @@ if INCLUDE_POOL_BATH:
     pool_bath_door()
 for p,w in [((1257,460),1.20),((1200,414),1.40)]:
     opening('Master sitting window',p,w,.70,2.45,.20)
-# Large rear sliding glass openings on the lanai.
-opening('Family room pool slider',(607,322),2.44,.035,2.62,0,True)
-opening('Living room pool slider',(850,540),3.50,.035,2.62,0,True)
-# Matching glass doors in the angled wall between the living and family sliders.
-opening('Angled family pool doors',(659.5,490),1.75,.035,2.62,0,True)
-opening('Angled master pool door',(1038,475),1.75,.035,2.62,0,True)
+def french_doors(name,p,width,bottom=.035,top=2.62):
+    # Closed hinged French doors: separate framed leaves, ten glass lights
+    # per leaf, and paired hardware. Preserve the existing wall openings.
+    wall,u2 = nearest_wall(p)
+    u = Vector((*u2,0)); n = Vector((-u.y,u.x,0)); base = Vector(pt(p))
+    paint = material('French door white paint', (.94, .93, .88), .35)
+    hardware = material('French door satin brass', (.48, .36, .17), .28)
+    hardware.node_tree.nodes.get('Principled BSDF').inputs['Metallic'].default_value = .75
+    def q(x,z,offset):
+        return base+u*x+n*offset+Vector((0,0,z))
+    def rectangle(x0,x1,z0,z1):
+        return [(x0,z0),(x1,z0),(x1,z1),(x0,z1)]
+    def piece(label,x0,x1,z0,z1,mat=paint,depth=.065,offset=0):
+        return facade_prism(name+' '+label,p,u2,rectangle(x0,x1,z0,z1),
+                            depth,offset,mat)
+    profile = rectangle(-width/2,width/2,bottom,top)
+    difference(wall,facade_prism(name+' cutter',p,u2,profile,.65,0,None))
+    # Full-depth jambs and head, with casing on both wall faces.
+    for x0,x1 in [(-width/2,-width/2+.045),(width/2-.045,width/2)]:
+        piece('jamb',x0,x1,bottom,top,depth=WALL_THICKNESS)
+    piece('head',-width/2,width/2,top-.045,top,depth=WALL_THICKNESS)
+    for offset in (-.145,.145):
+        for x in (-width/2,width/2):
+            beam(name+' casing',q(x,bottom,offset),q(x,top,offset),.075,paint)
+        beam(name+' head casing',q(-width/2,top,offset),
+             q(width/2,top,offset),.075,paint)
+    piece('threshold',-width/2,width/2,.015,bottom+.012,coping,.28)
+
+    # The broad living-room opening gets fixed glazed sidelights rather
+    # than two implausibly wide hinged leaves; the other sets are pairs.
+    inner = width/2-.055
+    door_half = .90 if width > 2.60 else inner
+    panels = [('left leaf',-door_half,-.006,True),
+              ('right leaf',.006,door_half,True)]
+    if width > 2.60:
+        panels = [('left sidelight',-inner,-door_half-.025,False)] + panels
+        panels += [('right sidelight',door_half+.025,inner,False)]
+        for x in (-door_half-.0125,door_half+.0125):
+            piece('sidelight mullion',x-.022,x+.022,bottom,top,depth=.10)
+    for label,x0,x1,is_door in panels:
+        z0,z1 = bottom+.016,top-.055
+        stile = .09
+        gx0,gx1 = x0+stile,x1-stile
+        gz0,gz1 = z0+.18,z1-.10
+        piece(label+' left stile',x0,gx0,z0,z1)
+        piece(label+' right stile',gx1,x1,z0,z1)
+        piece(label+' bottom rail',gx0,gx1,z0,gz0)
+        piece(label+' top rail',gx0,gx1,gz1,z1)
+        # Real individual panes separated by narrow white glazing bars.
+        columns,rows = 2,5
+        bar_width = .024
+        for col in range(columns):
+            for row in range(rows):
+                a = gx0+(gx1-gx0)*col/columns
+                b = gx0+(gx1-gx0)*(col+1)/columns
+                c = gz0+(gz1-gz0)*row/rows
+                d = gz0+(gz1-gz0)*(row+1)/rows
+                piece(label+' glass pane',a,b,c,d,glass,.018)
+        for col in range(1,columns):
+            x = gx0+(gx1-gx0)*col/columns
+            piece(label+' vertical glazing bar',x-bar_width/2,x+bar_width/2,gz0,gz1,depth=.045)
+        for row in range(1,rows):
+            z = gz0+(gz1-gz0)*row/rows
+            piece(label+' horizontal glazing bar',gx0,gx1,z-bar_width/2,z+bar_width/2,depth=.045)
+        if is_door:
+            left = label == 'left leaf'
+            handle_x = x1-stile/2 if left else x0+stile/2
+            hinge_x = x0 if left else x1
+            direction = -1 if left else 1
+            for sign in (-1,1):
+                for z in (.32,1.30,2.35):
+                    piece(label+' hinge',hinge_x-.017,hinge_x+.017,z-.05,z+.05,
+                          hardware,.025,sign*.04)
+                piece(label+' handle plate',handle_x-.022,handle_x+.022,.95,1.10,
+                      hardware,.016,sign*.043)
+                beam(name+' handle spindle',q(handle_x,1.02,sign*.043),
+                     q(handle_x,1.02,sign*.09),.022,hardware,'Openings')
+                beam(name+' '+label+' lever',q(handle_x,1.02,sign*.09),
+                     q(handle_x+direction*.10,1.02,sign*.09),.022,hardware,'Openings')
+                piece(label+' lock plate',handle_x-.022,handle_x+.022,1.17,1.215,
+                      hardware,.016,sign*.043)
+
+
+# All four house-to-pool openings are French doors, not sliders.
+# The separate solid pool bath door above is deliberately unchanged.
+french_doors('Family room pool French doors',(607,322),2.44)
+french_doors('Living room pool French doors',(850,540),3.50)
+french_doors('Angled family pool French doors',(659.5,490),1.75)
+french_doors('Angled master pool French doors',(1038,475),1.75)
 
 
 def garage_door(p,width):
