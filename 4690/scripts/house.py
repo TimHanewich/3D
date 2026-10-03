@@ -884,8 +884,12 @@ def build_interior():
     partition('Bedroom 3 closet end',(315,400),(315,431))
     partition('Shared bathroom east wall',(320,431),(320,548),[(43,43,'passage')])
     partition('Shared bathroom south wall',(160,548),(320,548))
-    partition('Shared bath linen cupboard',(250,504),(320,504),[(12,45,'closet')])
-    partition('Shared bath linen divider',(250,504),(250,548))
+    # Keep the linen front beyond the bathroom entry (y=474..517).
+    # The old y=504 return crossed that opening, leaving a floating end.
+    # A recessed, doorless alcove also eliminates projecting bifold panels.
+    partition('Shared bath linen cupboard',(250,522),(320,522),
+              [(12,45,'passage')])
+    partition('Shared bath linen divider',(250,522),(250,548))
     partition('Bedroom 2 closet front',(160,728),(300,728),[(27,88,'closet')])
     partition('Bedroom 2 closet back',(160,758),(300,758))
     partition('Bedroom 2 closet end',(300,728),(300,758))
@@ -1483,7 +1487,7 @@ def build_interior():
     closet('Bedroom 3 wardrobe',(169,408,308,425))
     closet('Bedroom 2 wardrobe',(169,735,293,751))
     closet('Study storage',(940,802,1025,821))
-    closet('Shared bath linen',(256,529,313,541),(.35,.70,1.05,1.40,1.75))
+    closet('Shared bath linen',(256,526,313,541),(.35,.70,1.05,1.40,1.75))
     closet('Master bath linen',(1039,931,1077,942),(.35,.70,1.05,1.40,1.75))
     closet('Master walk-in north shelving',(1170,749,1245,773))
     closet('Master walk-in south shelving',(1170,927,1269,949))
