@@ -35,7 +35,7 @@ SIGN_Y = None                   # None = 2 meters behind the road edge
 SIGN_Z = None                   # None = default environment lawn elevation
 ANGLE_DEGREES = 0.0             # rotation about house-frame Z
 ROAD_CLEARANCE = 2.0
-PHOTO_PATH = r'C:\Users\timh\Downloads\bpy\pic.jpeg'
+PHOTO_PATH = r'C:\Users\timh\Downloads\tah\3D\scripts\pic.jpeg'
 PHOTO_MAX_WIDTH = 1.90          # outer board dimensions, in meters
 PHOTO_MAX_HEIGHT = 1.40
 PHOTO_GAP = 0.35                # edge-to-edge gap, left as seen from the street
