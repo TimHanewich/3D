@@ -186,15 +186,16 @@ def floor_z(p):
 # Deck has a genuine hole: no slab or fake blue plane across the basin.
 deck = prism('Surrounding pool deck',world(DECK),-.18,DECK_Z,deckmat)
 difference(deck,prism('Temporary pool void',pool,-3,1,None))
-ring('Continuous pale pool coping',pool,offset(pool,COPING_WIDTH),
-     DECK_Z-.025,DECK_Z+.015,coping)
+# No separate raised perimeter coping: the deck finishes flush at the pool.
+# Keep the structural shell rim just under the deck to avoid overlapping
+# visible faces or a contrasting plaster strip along the perimeter.
 
 # Closed basin shell with real depth and a gently sloping floor.
 outer = offset(pool,.18)
 n = len(pool)
 verts = ([(p.x,p.y,floor_z(p)) for p in pool]+
-         [(p.x,p.y,DECK_Z) for p in pool]+
-         [(p.x,p.y,DECK_Z) for p in outer]+
+         [(p.x,p.y,DECK_Z-.005) for p in pool]+
+         [(p.x,p.y,DECK_Z-.005) for p in outer]+
          [(p.x,p.y,floor_z(p)-.18) for p in outer])
 faces = [tuple(range(n)),tuple(reversed(range(3*n,4*n)))]
 for i in range(n):
