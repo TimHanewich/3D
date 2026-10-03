@@ -420,4 +420,62 @@ def stepped_waterfall():
 
 
 stepped_waterfall()
-print('P4690 dry pool, straight bench and stepped waterfall created; H4690 unchanged.')
+# Fit the pool assembly to the existing deck, without moving the house or
+# enlarging the deck. Apply the same factor in X and Y; retain all Z heights.
+# The original trace above is the pre-fit size, not the final fitted size.
+FIT_POOL_TO_DECK_CORNER = True
+
+
+def fit_pool_to_deck_corner():
+    cap = bpy.data.objects.get(PREFIX+'_Waterfall center fitted pale cap')
+    if cap is None:
+        raise RuntimeError('Cannot fit pool: waterfall corner cap is missing.')
+    # This square cap has an actual vertex at its maximum X/maximum Y.
+    cap_points = [cap.matrix_world @ v.co for v in cap.data.vertices]
+    corner = Vector((max(p.x for p in cap_points),max(p.y for p in cap_points)))
+    target = xy((1257,84))  # Back-right corner of the fixed deck/lanai limit.
+    anchor_x = min(p.x for p in pool)
+    factor = (target.x-anchor_x)/(corner.x-anchor_x)
+    if abs(factor-1) < 1e-8:
+        if abs(target.y-corner.y) > .001:
+            raise RuntimeError('Corner fit requires a different fixed anchor.')
+        return
+    if factor <= 0:
+        raise RuntimeError('Invalid pool fitting scale.')
+    # Solve the pivot's Y coordinate so ONE uniform plan scale reaches both
+    # target coordinates. All points on the leftmost X line keep that X:
+    # the pool does not slide right and widen the left-side deck gap.
+    anchor_y = (target.y-factor*corner.y)/(1-factor)
+    def fitted(p):
+        return Vector((anchor_x+(p.x-anchor_x)*factor,
+                       anchor_y+(p.y-anchor_y)*factor))
+
+    # Recreate the deck from its unchanged outer boundary with the new hole.
+    # Scaling the old deck (or retaining its old hole) would be incorrect.
+    bpy.data.objects.remove(deck,do_unlink=True)
+    for obj in list(root.objects):
+        if obj.type != 'MESH':
+            continue
+        inverse = obj.matrix_world.inverted()
+        for vertex in obj.data.vertices:
+            position = obj.matrix_world @ vertex.co
+            moved = fitted(position)
+            position.x,position.y = moved.x,moved.y
+            vertex.co = inverse @ position
+        obj.data.update()
+    fitted_outline = [fitted(p) for p in pool]
+    new_deck = prism('Surrounding pool deck',world(DECK),-.18,DECK_Z,deckmat)
+    difference(new_deck,prism('Fitted pool deck opening',fitted_outline,-3,1,None))
+    root['Pool plan scale'] = factor
+    root['Fixed left pool X'] = anchor_x
+    root['Plan scale pivot Y'] = anchor_y
+    root['Waterfall corner target'] = (target.x,target.y)
+    length = (max(p.x for p in fitted_outline)-min(p.x for p in fitted_outline))/.3048
+    width = (max(p.y for p in fitted_outline)-min(p.y for p in fitted_outline))/.3048
+    print('Pool enlarged uniformly in plan by %.1f%%; fitted size %.1f x %.1f ft.' %
+          ((factor-1)*100,length,width))
+
+
+if FIT_POOL_TO_DECK_CORNER:
+    fit_pool_to_deck_corner()
+print('P4690 dry pool fitted to deck corner; left starting X and H4690 unchanged.')
