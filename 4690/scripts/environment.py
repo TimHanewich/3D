@@ -32,7 +32,7 @@ from mathutils.geometry import tessellate_polygon
 PREFIX = 'E4690'
 SCALE = 13.0 * .3048 / 207.0
 SEED = 4690
-SITE_BOUNDS = (-20.5, 17.0, -15.0, 31.0)  # xmin, xmax, front, rear
+SITE_BOUNDS = (-25.0, 17.0, -15.0, 31.0)  # Widened west edge; xmin, xmax, front, rear
 LAWN_Z = -.055
 PAVING_Z = -.015
 BED_Z = -.027
@@ -832,6 +832,217 @@ def street_stop_sign():
 
 if MAKE_STREET and MAKE_STOP_SIGN:
     street_stop_sign()
+
+# -------------------------- NET NEW left roadside oak island --------------------------
+# LEFT means west / negative world X when viewing the house from the road.
+# This is a fourth large tree, NOT either of the repositioned front-yard oaks.
+# Its mound is a new mesh: no displacement, replacement or relocation of the
+# existing ground, trees, driveway, sign, curb, hoop or planting islands.
+MAKE_NEW_LEFT_ROADSIDE_ISLAND = True
+NEW_LEFT_ISLAND_CENTER = (-21.3, -10.3)
+NEW_LEFT_ISLAND_RADII = (2.50, 3.10)
+NEW_LEFT_ISLAND_HEIGHT = .40
+# The lot now extends west to x=-25.0 for its FULL depth, encompassing this
+# mound with a continuous lawn strip to the street and up the driveway side.
+# The existing skirt feathers into that lawn; its buried perimeter has no
+# exposed island edge. Street and curb lengths follow SITE_BOUNDS automatically.
+# Tree, mound, sign and driveway positions are deliberately unchanged.
+
+
+def add_left_roadside_oak_island():
+    if not MAKE_NEW_LEFT_ROADSIDE_ISLAND:
+        return
+    prior_objects = set(root.all_objects)
+    state = rng.getstate()
+    rng.seed(SEED+714)
+    group = 'New left roadside island'
+    col = bpy.data.collections.new(PREFIX+'_New_left_roadside_island')
+    root.children.link(col)
+    groups[group] = col
+    cx,cy = NEW_LEFT_ISLAND_CENTER
+    rx,ry = NEW_LEFT_ISLAND_RADII
+    label = 'NEW left-of-driveway island '
+
+    def edge_shape(a):
+        return 1+.022*math.sin(3*a)+.016*math.cos(5*a)
+
+    def ground_at(x,y):
+        xx,yy = (x-cx)/rx,(y-cy)/ry
+        a = math.atan2(yy,xx)
+        r = math.hypot(xx,yy)/edge_shape(a)
+        # Outer edge is embedded a few millimeters into the original lawn;
+        # the raised top replaces no original vertices or faces.
+        return LAWN_Z-.004+NEW_LEFT_ISLAND_HEIGHT*max(0,1-r*r)**2
+
+    def branch(name,points,radii,sides=10):
+        return tube(label+name,points,radii,bark,group,sides)
+
+    def core(name,center,radii,mat):
+        # Irregular, shaded inner foliage mass, dressed with detailed leaves.
+        # Avoids a sparse see-through hedge without using external assets.
+        verts,faces = [],[]
+        rows,segments = 9,16
+        for row in range(rows):
+            phi = -math.pi/2+.045+(math.pi-.09)*row/(rows-1)
+            for j in range(segments):
+                a = math.tau*j/segments
+                uneven = 1+.05*math.sin(3*a+row*.6)+.025*math.cos(5*a-row)
+                verts.append((center[0]+radii[0]*math.cos(phi)*math.cos(a)*uneven,
+                              center[1]+radii[1]*math.cos(phi)*math.sin(a)*uneven,
+                              center[2]+radii[2]*math.sin(phi)))
+        for row in range(rows-1):
+            for j in range(segments):
+                a = row*segments+j; b = row*segments+(j+1)%segments
+                faces.append((a,b,b+segments,a+segments))
+        faces += [tuple(reversed(range(segments))),
+                  tuple(range((rows-1)*segments,rows*segments))]
+        return mesh(label+name,verts,faces,mat,group,smooth=True)
+
+    try:
+        # Build a closed, smoothly sampled mound with a reddish mulch center
+        # and grass skirt, entirely LEFT of the actual driveway polygon.
+        rings,segments = 30,96
+        verts = [(cx,cy,ground_at(cx,cy))]
+        faces,ids = [],[]
+        for row in range(1,rings+1):
+            r = row/rings
+            for j in range(segments):
+                a = math.tau*j/segments
+                x = cx+rx*r*edge_shape(a)*math.cos(a)
+                y = cy+ry*r*edge_shape(a)*math.sin(a)
+                if inside((x,y),drive) or y <= SITE_BOUNDS[2]:
+                    raise ValueError('New left island must remain off driveway and street.')
+                verts.append((x,y,ground_at(x,y)))
+        for j in range(segments):
+            faces.append((0,1+j,1+(j+1)%segments)); ids.append(0)
+        for row in range(rings-1):
+            a0 = 1+row*segments
+            b0 = a0+segments
+            for j in range(segments):
+                k = (j+1)%segments
+                faces.append((a0+j,b0+j,b0+k,a0+k))
+                ids.append(0 if (row+2)/rings <= .80 else 1)
+        # Close the earthen sides and bottom. The widened continuous lawn
+        # now surrounds the entire skirt and conceals its perimeter sides.
+        outer = 1+(rings-1)*segments
+        bottom = len(verts)
+        verts.extend([(verts[outer+j][0],verts[outer+j][1],-.31)
+                      for j in range(segments)])
+        for j in range(segments):
+            k = (j+1)%segments
+            faces.append((outer+j,bottom+j,bottom+k,outer+k)); ids.append(2)
+        faces.append(tuple(reversed(range(bottom,bottom+segments)))); ids.append(2)
+        mound = mesh(label+'raised mulch bank and grass skirt',verts,faces,
+                     [mulch,grass,soil],group,ids,smooth=True)
+        mound['Net new addition'] = True
+        mound['Position'] = 'West / left of driveway when facing house from road'
+
+        if MAKE_TREES:
+            # Thick, early-forking oak with substantial spreading boughs.
+            # The new trunk stands well outside the driveway edge and the
+            # overhead crown can spread naturally across the entrance.
+            base = Vector((cx,cy,ground_at(cx,cy)))
+            def p(x,y,z):
+                return base+Vector((x,y,z))
+            branch('mature oak broad trunk',
+                   [p(0,0,-.03),p(.03,.02,.35),p(.09,.06,1.25),
+                    p(.02,.12,2.15),p(-.10,.15,2.90)],
+                   [.79,.66,.56,.50,.42],18)
+            for i in range(8):
+                a = i*math.tau/8+.1
+                length = 1.0+.13*math.sin(i*1.5)
+                ex,ey = cx+length*math.cos(a),cy+length*math.sin(a)
+                branch('oak buttress root',
+                       [p(.12*math.cos(a),.12*math.sin(a),.44),
+                        p(.50*math.cos(a),.50*math.sin(a),.13),
+                        Vector((ex,ey,ground_at(ex,ey)+.018))],
+                       [.22,.13,.023],9)
+            fork = p(-.08,.14,2.65)
+            clusters = []
+            for i in range(8):
+                a = i*math.tau/8+.18
+                u = Vector((math.cos(a),math.sin(a),0))
+                side = Vector((-u.y,u.x,0))
+                reach = 4.0+rng.random()*.7
+                end = base+u*reach+Vector((0,0,5.5+rng.uniform(-.30,.70)))
+                elbow = fork+u*1.6+side*rng.uniform(-.25,.25)+Vector((0,0,1.15))
+                points = bezier(tuple(fork),tuple(fork+u*.6+Vector((0,0,.8))),
+                                tuple(elbow),tuple(end),16)
+                branch('oak spreading scaffold %02d'%i,points,
+                       [.32*(1-j/20)**1.30+.018 for j in range(17)],12)
+                for j in range(4):
+                    aa = a+(j-1.5)*.36
+                    direction = Vector((math.cos(aa),math.sin(aa),0))
+                    start = Vector(points[9+j])
+                    tip = end+direction*rng.uniform(1.1,1.85)+Vector((0,0,rng.uniform(.6,1.5)))
+                    middle = start.lerp(tip,.60)+Vector((0,0,.38))
+                    branch('oak secondary bough',
+                           bezier(tuple(start),tuple(start+direction*.55),
+                                  tuple(middle),tuple(tip),10),
+                           [.095*(1-k/12)+.008 for k in range(11)],8)
+                    for sign in (-1,1):
+                        branch('oak fine branching',
+                               [middle,tip,tip+side*sign*.60+Vector((0,0,.30))],
+                               [.033,.019,.005],5)
+                    clusters.append((tuple(tip),(1.40,1.30,1.05)))
+                clusters.append((tuple(base+u*2.5+Vector((0,0,7.15+rng.uniform(-.2,.5)))),
+                                 (1.85,1.65,1.12)))
+            branch('oak central leader',[fork,p(.38,.22,4.0),p(.23,.38,6.0),p(.55,.4,7.5)],
+                   [.27,.20,.11,.024],12)
+            if MAKE_TREE_CROWNS:
+                leaf_cloud(label+'mature oak broad canopy',clusters,
+                           foliage,group,density=1300,size=.22)
+
+        if MAKE_SMALL_PLANTS:
+            shaded = material('New left island shaded hedge',(.027,.069,.018),
+                              (.07,.125,.03),12,.009)
+            # Overlapping tall, leafy shrubs rather than a few small clumps.
+            # Leave the street-side sign at its original position and height.
+            specs = [(-1.02,-.95,.65,1.65),(-.25,-1.40,.76,1.85),
+                     (.55,-1.16,.73,1.95),(1.12,-.53,.62,1.80),
+                     (1.15,.30,.62,1.90),(.65,1.10,.75,2.02),
+                     (-.10,1.42,.73,1.95),(-.95,.99,.67,1.80),
+                     (-1.20,.12,.64,1.72)]
+            for i,(dx,dy,r,h) in enumerate(specs):
+                x,y = cx+dx,cy+dy
+                z = ground_at(x,y)
+                clusters = [((x,y,z+h*.54),(r,r*.88,h*.47)),
+                            ((x+r*.35,y-.1,z+h*.61),(r*.70,r*.69,h*.33)),
+                            ((x-r*.32,y+.16,z+h*.60),(r*.68,r*.72,h*.35))]
+                for k,(center,radii) in enumerate(clusters):
+                    core('dense shrub %02d shaded interior %d'%(i,k),
+                         center,tuple(v*.82 for v in radii),shaded)
+                leaf_cloud(label+'dense shrub %02d leaves'%i,clusters,
+                           foliage[:4],group,density=650,size=.15)
+                branch('shrub woody stem',[(x,y,z),(x+.04,y,z+h*.65)],
+                       [.032,.008],7)
+            # Low pale-green strap leaves along the mulch/grass transition.
+            for i in range(30):
+                a = math.tau*i/30
+                x = cx+rx*.72*math.cos(a)
+                y = cy+ry*.72*math.sin(a)
+                ob = strap_plant(label+'low border clump %02d'%i,x,y,
+                                 .35+.08*rng.random(),.27,strapmats,26)
+                ob.location.z += ground_at(x,y)-BED_Z
+
+        # Collect ONLY newly created objects into the independent addition.
+        # Existing tree groups and every original object remain as generated.
+        for ob in set(root.all_objects)-prior_objects:
+            if col not in list(ob.users_collection):
+                col.objects.link(ob)
+            for owner in list(ob.users_collection):
+                if owner != col:
+                    owner.objects.unlink(ob)
+        col['Net new'] = True
+        col['Mound center meters'] = NEW_LEFT_ISLAND_CENTER
+        col['Mound height meters'] = NEW_LEFT_ISLAND_HEIGHT
+        col['Reference'] = 'Circled roadside oak and dense hedge; left looking from road toward house'
+        col['Existing scene geometry'] = 'Unmodified; additive bank and vegetation only'
+    finally:
+        rng.setstate(state)
+
+
+add_left_roadside_oak_island()
 
 # Reference-only metadata travels with the generated collection.
 root['Coordinate system'] = 'Meters; same xy() origin as house.py and pool.py; front -Y'
