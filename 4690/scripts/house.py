@@ -13,7 +13,10 @@ Roof intersections are overlapping hip volumes, not construction-ready framing.
 House geometry and materials only, including the porch and covered lanai.
 No pool, spa, screen enclosure, landscaping, driveway, or walkway.
 No cameras, lights, world setup, render settings, or viewport configuration.
-No interior partitions or automatic .blend save. Coordinates are in meters.
+Interior partitions, closets, cabinetry and fixtures follow the supplied plan.
+Furniture, finishes, door heights and fixture details are illustrative estimates.
+Optional furniture and ceilings are controlled by the settings below.
+No automatic .blend save. Coordinates are in meters.
 Existing unrelated scene objects and presentation settings are left untouched.
 """
 import math
@@ -30,6 +33,13 @@ ROOF_PITCH = 0.36
 ROOF_OVERHANG_PX = 24
 MAKE_ROOF_TILES = True
 INCLUDE_POOL_BATH = True
+MAKE_INTERIOR = True
+MAKE_INTERIOR_FURNITURE = True
+MAKE_INTERIOR_CEILINGS = False  # Leave off for an unobstructed top-down inspection.
+INTERIOR_CUTAWAY = False      # Hide roofs/ceilings in viewport only, not renders.
+INTERIOR_WALL_THICKNESS = .115
+INTERIOR_DOOR_HEIGHT = 2.13
+INTERIOR_FLOOR_Z = .045       # Above the existing broad porch paving slab.
 PREFIX = 'H4690'
 random.seed(4690)
 
@@ -747,6 +757,481 @@ def house_corner_blocks():
 
 house_corner_blocks()
 
+# -------------------------- interior --------------------------
+# All plan points below use the same 1440px reference and xy() transform as
+# the shell. Room dimensions in the drawing are nominal, not survey dimensions.
+# Openings are assembled from jamb segments and headers: no hidden solid wall
+# remains behind a door. Interior components live in independent collections.
+def build_interior():
+    for name in ['Interior walls', 'Interior doors', 'Interior floors',
+                 'Interior cabinetry', 'Interior fixtures', 'Interior furniture',
+                 'Interior ceilings']:
+        col = bpy.data.collections.new(PREFIX + '_' + name)
+        root.children.link(col)
+        groups[name] = col
+
+    paint = material('Interior warm white plaster', (.86,.84,.78), .82)
+    wood = material('Interior oak flooring', (.43,.29,.16), .65, .002)
+    tile = material('Interior limestone tile', (.72,.69,.60), .65, .003)
+    grout = material('Interior tile grout', (.48,.46,.40), .85)
+    cabinet = material('Interior painted cabinetry', (.81,.80,.73), .48)
+    oak = material('Interior oak joinery', (.35,.22,.11), .52)
+    stone = material('Interior quartz worktops', (.90,.88,.81), .32)
+    ceramic = material('Interior white porcelain', (.94,.94,.91), .20)
+    metal = material('Interior brushed nickel', (.48,.51,.52), .26)
+    metal.node_tree.nodes.get('Principled BSDF').inputs['Metallic'].default_value = .8
+    dark = material('Interior appliance black', (.028,.033,.038), .25)
+    fabric = material('Interior oatmeal upholstery', (.64,.59,.49), .95)
+    bedding = material('Interior ivory linen', (.88,.86,.79), .95)
+    accent = material('Interior muted sage', (.27,.37,.32), .9)
+    shower_glass = material('Interior clear shower glass', (.96,.99,.98), .08)
+    shower_shader = shower_glass.node_tree.nodes.get('Principled BSDF')
+    shower_shader.inputs['Transmission Weight'].default_value = 1.0
+    shower_shader.inputs['IOR'].default_value = 1.45
+    fz = INTERIOR_FLOOR_Z + .009
+    thick = INTERIOR_WALL_THICKNESS
+
+    def rect(name, bounds, low, high, mat, group='Interior cabinetry'):
+        return slab(name, bounds, low, high, mat, group)
+
+    def segment(name, a, b, z0, z1, width, mat, group):
+        av,bv = Vector(xy(a)),Vector(xy(b))
+        delta = bv-av
+        middle = (av+bv)/2
+        return box(name, (middle.x,middle.y,(z0+z1)/2),
+                   (delta.length,width,z1-z0),mat,group,
+                   math.atan2(delta.y,delta.x))
+
+    def partition(name, a, b, openings=()):
+        # Each opening: (distance from a in IMAGE PIXELS, width in pixels,
+        # 'door'/'closet'/'open'). Door leaves are shown ajar for circulation.
+        av,bv = Vector(a),Vector(b)
+        length = (bv-av).length
+        direction = (bv-av)/length
+        u = Vector((direction.x,-direction.y,0))
+        n = Vector((-u.y,u.x,0))
+        def p(distance):
+            return tuple(av+direction*distance)
+        def solid(lo,hi):
+            if hi-lo < .01:
+                return
+            ob = segment(name, p(lo),p(hi),fz,WALL_HEIGHT,thick,paint,'Interior walls')
+            ob['reference'] = 'Supplied floorplan; manually traced partition'
+            # Baseboards on both sides, stopped at every doorway.
+            for side in (-1,1):
+                edge = n*side*(thick/2+.009)
+                base = segment(name+' skirting',p(lo),p(hi),fz,fz+.105,.018,
+                               trim,'Interior walls')
+                base.location += edge
+        cursor = 0
+        for offset,width,kind in sorted(openings):
+            if offset < cursor or offset+width > length+.001:
+                raise ValueError('Invalid interior opening: '+name)
+            solid(cursor,offset)
+            height = 2.65 if kind == 'open' else INTERIOR_DOOR_HEIGHT
+            segment(name+' opening header',p(offset),p(offset+width),
+                    fz+height,WALL_HEIGHT,thick,paint,'Interior walls')
+            if kind != 'open':
+                left,right = Vector(pt(p(offset),fz)),Vector(pt(p(offset+width),fz))
+                for side in (-1,1):
+                    off = n*side*(thick/2+.016)
+                    for v in (left,right):
+                        beam(name+' door casing',v+off,v+off+Vector((0,0,height)),
+                             .048,trim,'Interior doors',.035)
+                    beam(name+' head casing',left+off+Vector((0,0,height)),
+                         right+off+Vector((0,0,height)),.048,trim,'Interior doors',.035)
+                for v in (left,right):
+                    beam(name+' jamb',v+Vector((0,0,.01)),v+Vector((0,0,height)),
+                         .028,trim,'Interior doors',thick)
+                clear = width*SCALE-.055
+                if kind == 'door':
+                    theta = math.radians(72)
+                    leaf_u = u*math.cos(theta)+n*math.sin(theta)
+                    hinge = left+u*.03
+                    center = hinge+leaf_u*clear/2+Vector((0,0,height/2))
+                    box(name+' open door leaf',center,(clear,.038,height-.025),
+                        cabinet,'Interior doors',math.atan2(leaf_u.y,leaf_u.x))
+                    for side in (-1,1):
+                        normal = Vector((-leaf_u.y,leaf_u.x,0))*side
+                        handle = hinge+leaf_u*(clear-.10)+Vector((0,0,1.0))
+                        beam(name+' lever',handle+normal*.045,
+                             handle+normal*.045-leaf_u*.10,.018,metal,'Interior doors')
+                else:
+                    # Bifolds parked at each jamb rather than blocking access.
+                    for side,v in [(1,left),(-1,right)]:
+                        for k in range(2):
+                            center = v+u*side*(.04+k*.05)+n*(clear/8)
+                            center.z += height/2
+                            box(name+' folded closet panel',center,
+                                (.027,clear/4,height-.025),cabinet,'Interior doors',
+                                math.atan2(u.y,u.x))
+            cursor = offset+width
+        solid(cursor,length)
+
+    # West bedroom wing: narrow hall along the family room and kitchen.
+    partition('Bedroom wing east wall',(367,224),(367,730),
+              [(173,46,'door'),(323,46,'door')])
+    partition('Bedroom 3 closet front',(160,400),(315,400),[(30,96,'closet')])
+    partition('Bedroom 3 closet back',(160,431),(320,431))
+    partition('Bedroom 3 closet end',(315,400),(315,431))
+    partition('Shared bathroom east wall',(320,431),(320,548),[(43,43,'door')])
+    partition('Shared bathroom south wall',(160,548),(320,548))
+    partition('Shared bath linen cupboard',(250,504),(320,504),[(12,45,'closet')])
+    partition('Shared bath linen divider',(250,504),(250,548))
+    partition('Bedroom 2 closet front',(160,728),(300,728),[(27,88,'closet')])
+    partition('Bedroom 2 closet back',(160,758),(300,758))
+    partition('Bedroom 2 closet end',(300,728),(300,758))
+    partition('Bedroom 2 to laundry',(300,730),(463,730))
+    partition('Laundry west wall',(300,758),(300,813))
+    partition('Laundry passage wall',(463,730),(463,813),[(35,44,'open')])
+    partition('Garage to laundry',(300,813),(524,813),[(170,46,'door')])
+    partition('Garage east return',(524,813),(524,990))
+
+    # Keep family/kitchen, kitchen/living and the central gallery open.
+    partition('Living to master',(972,540),(972,740))
+    partition('Master suite gallery threshold',(972,740),(1085,740),[(12,86,'open')])
+    partition('Master bath approach',(1085,704),(1085,796))
+    partition('Dining west wall',(524,788),(524,990))
+    partition('Dining north return',(524,788),(597,788))
+    partition('Dining diagonal opening',(641,788),(708,848),[(3,83,'open')])
+    partition('Dining entry return',(708,848),(708,902))
+    partition('Study diagonal entrance',(836,848),(900,796),[(9,55,'door')])
+    partition('Study closet north',(900,796),(1032,796))
+    partition('Master bath north return',(1032,796),(1085,796))
+    partition('Study closet front',(934,827),(1032,827),[(10,78,'closet')])
+    partition('Study closet side',(934,796),(934,827))
+    partition('Study to master bath',(1032,796),(1032,1020))
+    partition('Master closet north',(1162,742),(1257,742))
+    partition('Master closet upper return',(1162,742),(1162,774))
+    partition('Master closet upper diagonal',(1162,774),(1198,805))
+    partition('Master closet entrance',(1198,805),(1198,895),[(21,47,'door')])
+    partition('Master closet lower diagonal',(1198,895),(1162,924))
+    partition('Master closet lower return',(1162,924),(1162,956))
+    partition('Master closet south',(1162,956),(1280,956))
+    partition('Master bath linen front',(1032,924),(1085,924),[(7,39,'closet')])
+    partition('Master bath linen shelf wall',(1032,948),(1085,948))
+    partition('Master toilet room north',(1032,1005),(1085,1005))
+    partition('Master toilet room east',(1085,1005),(1085,1080),[(9,44,'door')])
+    if INCLUDE_POOL_BATH:
+        partition('Pool bathroom south',(300,224),(446,224),[(8,46,'door')])
+        partition('Pool bathroom vanity return',(362,190),(446,190))
+
+    # Continuous finish, with room-specific inserts; all inserts share a level.
+    prism('Interior continuous oak finish',outline,.002,INTERIOR_FLOOR_Z,wood,
+          'Interior floors')
+    tile_areas = [
+        ('Kitchen and breakfast',[(367,500),(530,500),(607,440),(712,540),
+                                   (680,578),(680,740),(463,740),(463,813),
+                                   (300,813),(300,730),(367,730)]),
+        ('Gallery and foyer',[(463,740),(1085,740),(1085,796),(900,796),
+                              (836,848),(836,902),(708,902),(708,848),
+                              (641,788),(524,788),(524,813),(463,813)]),
+        ('Shared bath',[(160,431),(320,431),(320,548),(160,548)]),
+        ('Master bath',[(1032,796),(1162,796),(1198,827),(1198,895),
+                         (1162,924),(1162,956),(1255,956),(1255,1082),
+                         (1195,1082),(1195,1110),(1085,1110),(1085,1080),
+                         (1032,1080)]),
+    ]
+    if INCLUDE_POOL_BATH:
+        tile_areas.append(('Pool bath',[(300,84),(446,84),(446,224),(300,224)]))
+
+    def inside(p, poly):
+        x,y = p
+        odd = False
+        for i,a in enumerate(poly):
+            b = poly[(i+1)%len(poly)]
+            if (a[1]>y) != (b[1]>y):
+                if x < (b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0]:
+                    odd = not odd
+        return odd
+
+    for name,poly in tile_areas:
+        prism(name+' tiled floor',poly,INTERIOR_FLOOR_Z, fz-.002,tile,'Interior floors')
+        # Clip fine joint lines against the polygon by sampling at 1px steps.
+        # One mesh per room avoids thousands of individual tile objects.
+        verts,faces = [],[]
+        xs,ys = [p[0] for p in poly],[p[1] for p in poly]
+        step = .305/SCALE
+        def joint(a,b):
+            av,bv = Vector(xy(a)),Vector(xy(b))
+            normal = Vector((-(bv-av).y,(bv-av).x)).normalized()*.0008
+            index = len(verts)
+            verts.extend([(v.x,v.y,fz-.0015) for v in
+                          (av+normal,bv+normal,bv-normal,av-normal)])
+            faces.append(tuple(range(index,index+4)))
+        for axis in (0,1):
+            low,high = (min(xs),max(xs)) if axis == 0 else (min(ys),max(ys))
+            lo,hi = (min(ys),max(ys)) if axis == 0 else (min(xs),max(xs))
+            for k in range(math.ceil(low/step),math.floor(high/step)+1):
+                fixed = k*step
+                start = None
+                for t in range(math.floor(lo),math.ceil(hi)+1):
+                    p = (fixed,t+.5) if axis == 0 else (t+.5,fixed)
+                    valid = t < hi and inside(p,poly)
+                    if valid and start is None:
+                        start = t
+                    elif not valid and start is not None:
+                        a,b = ((fixed,start),(fixed,t)) if axis == 0 else ((start,fixed),(t,fixed))
+                        joint(a,b)
+                        start = None
+        mesh(name+' tile joints',verts,faces,grout,'Interior floors')
+    prism('Garage concrete floor',[(160,758),(300,758),(300,813),(524,813),
+          (524,1240),(186,1240),(186,1067),(160,1067)],
+          INTERIOR_FLOOR_Z,fz,concrete,'Interior floors')
+
+    # Fixtures use modeled hollow bowls, not solid blocks painted as sinks.
+    def oval(name,p,rx,ry,levels,mat=ceramic,group='Interior fixtures'):
+        verts,faces = [],[]
+        count = 40
+        for z,r in levels:
+            for j in range(count):
+                t = 2*math.pi*j/count
+                base = Vector(pt(p,z))
+                verts.append((base.x+rx*r*math.cos(t),base.y+ry*r*math.sin(t),z))
+        for i in range(len(levels)-1):
+            for j in range(count):
+                a = i*count+j
+                b = i*count+(j+1)%count
+                faces.append((a,b,b+count,a+count))
+        faces += [tuple(reversed(range(count))),
+                  tuple(range((len(levels)-1)*count,len(levels)*count))]
+        ob = mesh(name,verts,faces,mat,group)
+        for face in ob.data.polygons:
+            if len(face.vertices) == 4:
+                face.use_smooth = True
+        return ob
+
+    def tap(name,p,z):
+        base = Vector(pt(p,z))
+        beam(name+' faucet riser',base,base+Vector((0,0,.22)),.025,metal,'Interior fixtures')
+        beam(name+' faucet spout',base+Vector((0,0,.22)),
+             base+Vector((0,-.14,.22)),.025,metal,'Interior fixtures')
+
+    def worktop(name,bounds,height=.90):
+        a,b,c,d = bounds
+        # Hollow carcass leaves room for real recessed sink bowls.
+        for label,bounds in [('west side',(a+1,b+1,a+2,d-1)),
+                             ('east side',(c-2,b+1,c-1,d-1)),
+                             ('north face',(a+2,b+1,c-2,b+2)),
+                             ('south face',(a+2,d-2,c-2,d-1))]:
+            rect(name+' '+label,bounds,fz+.09,height-.04,cabinet)
+        rect(name+' cabinet bottom',(a+1,b+1,c-1,d-1),fz+.09,fz+.115,cabinet)
+        rect(name+' recessed plinth',(a+3,b+3,c-3,d-3),fz,fz+.09,oak)
+        top = rect(name+' countertop',bounds,height-.04,height,stone)
+        # Fine join lines on all vertical faces remain useful at any orientation.
+        count = max(1,round((c-a)*SCALE/.55))
+        for i in range(1,count):
+            x = a+(c-a)*i/count
+            for y in (b+.8,d-.8):
+                segment(name+' cabinet seam',(x,y),(x,y+.05),fz+.14,height-.08,
+                        .006,oak,'Interior cabinetry')
+        return top
+
+    def sink(name,top,p,z=.90,rx=.23,ry=.18):
+        # Oval cut is concealed by the rim; the cabinet below is hollow.
+        cutter = oval(name+' basin cutter',p,rx*.91,ry*.91,
+                      [(z-.28,1),(z+.08,1)],None)
+        difference(top,cutter)
+        oval(name+' hollow basin',p,rx,ry,
+             [(z-.17,.38),(z+.006,1),(z+.019,1),(z+.019,.84),
+              (z-.14,.48),(z-.15,.12)])
+        tap(name,(p[0],p[1]-ry/SCALE-3),z)
+
+    def toilet(name,p):
+        oval(name+' pedestal',p,.16,.21,[(fz,.8),(fz+.08,1),(fz+.33,.80)])
+        oval(name+' bowl and seat',p,.205,.29,
+             [(fz+.16,.65),(fz+.40,1),(fz+.43,1),(fz+.43,.78),
+              (fz+.25,.42),(fz+.23,.05)])
+        x,y = p
+        rect(name+' cistern',(x-11,y-23,x+11,y-13),fz+.27,fz+.76,ceramic,
+             'Interior fixtures')
+        rect(name+' flush button',(x-2,y-20,x+2,y-17),fz+.76,fz+.765,metal,
+             'Interior fixtures')
+
+    def tub(name,bounds):
+        a,b,c,d = bounds
+        oval(name+' hollow bathtub',((a+c)/2,(b+d)/2),(c-a)*SCALE/2,(d-b)*SCALE/2,
+             [(fz,.83),(fz+.50,1),(fz+.54,1),(fz+.54,.85),
+              (fz+.12,.69),(fz+.10,.05)])
+        tap(name,((a+c)/2,b+2),fz+.54)
+
+    def shower(name,bounds):
+        a,b,c,d = bounds
+        rect(name+' shower tray',bounds,fz,fz+.055,ceramic,'Interior fixtures')
+        rect(name+' drain',((a+c)/2-2,(b+d)/2-2,(a+c)/2+2,(b+d)/2+2),
+             fz+.055,fz+.058,metal,'Interior fixtures')
+        # Open entry on the left; partial clear screen on the lower edge.
+        segment(name+' glass screen',(a+(c-a)*.35,d),(c,d),fz+.07,2.12,.012,
+                shower_glass,'Interior fixtures')
+        for x in (a+(c-a)*.35,c):
+            beam(name+' screen post',pt((x,d),fz),pt((x,d),2.13),.025,metal,
+                 'Interior fixtures')
+        back = (c-5,(b+d)/2)
+        beam(name+' shower riser',pt(back,1.02),pt(back,2.18),.026,metal,'Interior fixtures')
+        head = Vector(pt(back,2.18))
+        beam(name+' shower arm',head,head+Vector((-.22,0,0)),.024,metal,'Interior fixtures')
+        box(name+' shower head',head+Vector((-.22,0,-.018)),(.18,.18,.035),metal,
+            'Interior fixtures')
+
+    # Kitchen: west/south L, angled breakfast bar, refrigerator and range on east.
+    west = worktop('Kitchen west counter',(385,573,417,696))
+    worktop('Kitchen south counter',(402,696,564,728))
+    sink('Kitchen double sink left',west,(401,630),rx=.20,ry=.17)
+    sink('Kitchen double sink right',west,(401,651),rx=.20,ry=.17)
+    rect('Dishwasher stainless front',(385,667,386,693),fz+.10,.84,metal)
+    barpoly = [(475,555),(514,555),(563,600),(563,653),(516,653),(516,618),(475,580)]
+    prism('Angled breakfast bar base',barpoly,fz,.88,cabinet,'Interior cabinetry')
+    prism('Angled breakfast bar quartz',barpoly,.88,.93,stone,'Interior cabinetry')
+    prism('Raised breakfast serving ledge',[(475,555),(487,550),(568,596),
+          (568,625),(552,625),(552,605),(475,570)],1.04,1.09,stone,'Interior cabinetry')
+    worktop('Range base',(645,685,679,736))
+    rect('Range cooktop',(644,686,680,733),.901,.925,dark,'Interior fixtures')
+    for x in (653,670):
+        for y in (697,722):
+            oval('Range burner',(x,y),.085,.085,[(.925,1),(.933,1)],metal)
+    rect('Oven front',(644,689,645,731),fz+.17,.78,dark,'Interior fixtures')
+    rect('Range hood',(644,686,680,733),1.78,1.91,metal,'Interior fixtures')
+    rect('Range hood chimney',(657,697,679,722),1.91,2.65,metal,'Interior fixtures')
+    rect('Refrigerator body',(644,626,679,678),fz,2.05,metal,'Interior fixtures')
+    rect('Refrigerator door division',(643,651,644,653),fz+.02,2.02,dark,'Interior fixtures')
+    for y in (647,657):
+        beam('Refrigerator pull',pt((641,y),1.0),pt((641,y),1.58),.024,metal,'Interior fixtures')
+    rect('Kitchen upper west cabinets',(376,574,394,608),1.45,2.35,cabinet)
+    rect('Kitchen upper south cabinets',(421,710,508,728),1.45,2.35,cabinet)
+
+    shared = worktop('Shared bath double vanity',(219,437,311,466),.86)
+    for x in (235,291):
+        sink('Shared bath basin',shared,(x,451),.86,.205,.17)
+        rect('Shared bath mirror',(x-12,434,x+12,435),1.04,2.08,metal,'Interior fixtures')
+    toilet('Shared bath toilet',(190,468))
+    tub('Shared bath tub',(167,505,245,542))
+    master = worktop('Master double vanity',(1037,801,1073,921),.86)
+    for y in (826,895):
+        sink('Master vanity basin',master,(1054,y),.86,.21,.18)
+        rect('Master vanity mirror',(1034,y-16,1035,y+16),1.04,2.16,metal,'Interior fixtures')
+    toilet('Master enclosed toilet',(1060,1053))
+    tub('Master soaking tub',(1095,1058,1181,1103))
+    shower('Master walk-in shower',(1200,964,1248,1076))
+    if INCLUDE_POOL_BATH:
+        pooltop = worktop('Pool bath vanity',(365,194,438,220),.86)
+        sink('Pool bath basin',pooltop,(402,207),.86)
+        toilet('Pool bath toilet',(329,119))
+        shower('Pool bath shower',(357,90,439,124))
+
+    # Laundry occupies the service strip between the bedroom and garage.
+    for name,bounds in [('Washer',(305,736,338,775)),('Dryer',(345,736,379,775))]:
+        a,b,c,d = bounds
+        rect(name+' enamel cabinet',bounds,fz,.89,ceramic,'Interior fixtures')
+        rect(name+' top lid',(a+3,b+3,c-3,d-6),.89,.91,metal,'Interior fixtures')
+        rect(name+' controls',(a+2,b+1,c-2,b+5),.91,1.0,dark,'Interior fixtures')
+    laundry = worktop('Laundry utility counter',(387,734,459,768))
+    sink('Laundry utility sink',laundry,(442,751),rx=.22,ry=.21)
+    rect('Laundry wall cabinets',(303,733,426,750),1.48,2.30,cabinet)
+
+    def closet(name,bounds,levels=(1.72,)):
+        a,b,c,d = bounds
+        for z in levels:
+            rect(name+' shelf',(a,b,c,d),z,z+.025,cabinet)
+        if len(levels) == 1:
+            segment(name+' hanging rail',(a,(b+d)/2),(c,(b+d)/2),1.57,1.60,
+                    .028,metal,'Interior cabinetry')
+    closet('Bedroom 3 wardrobe',(169,408,308,425))
+    closet('Bedroom 2 wardrobe',(169,735,293,751))
+    closet('Study storage',(940,802,1025,821))
+    closet('Shared bath linen',(256,529,313,541),(.35,.70,1.05,1.40,1.75))
+    closet('Master bath linen',(1039,931,1077,942),(.35,.70,1.05,1.40,1.75))
+    closet('Master walk-in north shelving',(1170,749,1245,773))
+    closet('Master walk-in south shelving',(1170,927,1269,949))
+    for z in (.36,.72,1.08,1.44,1.80):
+        rect('Master closet east shelves',(1248,781,1271,919),z,z+.025,cabinet)
+    segment('Master closet east hanging rail',(1239,785),(1239,918),1.59,1.62,
+            .028,metal,'Interior cabinetry')
+
+    # Optional illustrative loose furnishings; never use these as measured data.
+    if MAKE_INTERIOR_FURNITURE:
+        group = 'Interior furniture'
+        def furniture(name,p,size,z,mat,angle=0):
+            return box(name,pt(p,z),size,mat,group,angle)
+        def bed(name,p,width=1.52):
+            x,y = p
+            furniture(name+' frame',p,(width+.12,2.14,.28),fz+.20,oak)
+            furniture(name+' mattress',p,(width,2.02,.23),fz+.455,bedding)
+            furniture(name+' blanket',(x,y+22),(width+.015,1.16,.045),fz+.59,accent)
+            furniture(name+' headboard',(x,y-55),(width+.18,.085,1.1),fz+.59,oak)
+            for side in (-1,1):
+                furniture(name+' pillow',(x+side*width*.24/SCALE,y-34),
+                          (width*.40,.43,.12),fz+.63,bedding)
+                furniture(name+' nightstand',(x+side*(width/2+.34)/SCALE,y-40),
+                          (.46,.44,.48),fz+.24,oak)
+        def table(name,p,width,depth,height=.75):
+            x,y = p
+            furniture(name+' top',p,(width,depth,.055),fz+height,oak)
+            for sx in (-1,1):
+                for sy in (-1,1):
+                    q = (x+sx*(width/2-.08)/SCALE,y+sy*(depth/2-.08)/SCALE)
+                    furniture(name+' leg',q,(.055,.055,height-.03),fz+height/2,oak)
+        def chair(name,p,angle=0):
+            base = Vector(pt(p))
+            def local(label,x,y,z,size,mat):
+                offset = Vector((x*math.cos(angle)-y*math.sin(angle),
+                                 x*math.sin(angle)+y*math.cos(angle),fz+z))
+                box(name+' '+label,base+offset,size,mat,group,angle)
+            local('seat',0,0,.45,(.46,.46,.09),fabric)
+            local('back',0,.20,.73,(.46,.065,.57),fabric)
+            for x in (-.17,.17):
+                for y in (-.17,.17):
+                    local('leg',x,y,.22,(.035,.035,.44),oak)
+        def sofa(name,p,width=2.20,angle=0):
+            base = Vector(pt(p))
+            def local(label,x,y,z,size,mat=fabric):
+                offset = Vector((x*math.cos(angle)-y*math.sin(angle),
+                                 x*math.sin(angle)+y*math.cos(angle),fz+z))
+                box(name+' '+label,base+offset,size,mat,group,angle)
+            local('base',0,0,.24,(width,.88,.30))
+            local('back',0,.36,.64,(width,.18,.70))
+            for x in (-width/2+.09,width/2-.09):
+                local('arm',x,0,.52,(.18,.88,.45))
+            for i in range(3):
+                local('seat cushion',-width/3+i*width/3,-.03,.46,
+                      ((width-.40)/3,.66,.16))
+        bed('Bedroom 3 bed',(252,315))
+        bed('Bedroom 2 bed',(252,633))
+        bed('Master king bed',(1148,644),1.93)
+        furniture('Bedroom 3 dresser',(340,307),(.43,1.15,.85),fz+.425,oak)
+        furniture('Bedroom 2 dresser',(340,635),(.43,1.15,.85),fz+.425,oak)
+        sofa('Family room sofa',(475,402),2.35,math.pi)
+        table('Family coffee table',(474,346),1.15,.62,.40)
+        furniture('Family media console',(559,209),(1.37,.45,.58),fz+.29,oak)
+        furniture('Family television',(559,204),(1.30,.045,.76),1.30,dark)
+        furniture('Family optional fireplace',(482,210),(1.36,.62,1.16),fz+.58,stone)
+        furniture('Family fireplace inset',(482,227),(.88,.025,.60),fz+.55,dark)
+        sofa('Living room sofa',(845,608),2.25)
+        table('Living coffee table',(846,665),1.18,.62,.40)
+        chair('Living accent chair',(931,673),-math.pi/2)
+        table('Dining table',(613,887),1.02,1.88)
+        for x,angle in [(566,-math.pi/2),(660,math.pi/2)]:
+            for y in (855,896,936):
+                chair('Dining chair',(x,y),angle)
+        table('Study desk',(963,970),1.48,.68)
+        chair('Study desk chair',(963,924),math.pi)
+        furniture('Study bookcase',(854,949),(.33,1.65,1.85),fz+.925,oak)
+        chair('Master sitting chair left',(1150,485),.35)
+        chair('Master sitting chair right',(1222,487),-.35)
+        table('Master sitting side table',(1187,490),.40,.40,.48)
+        for p in [(466,589),(491,614),(500,654)]:
+            chair('Breakfast bar stool',p,math.pi/4)
+        table('Garage workbench',(423,1197),2.40,.66,.91)
+
+    if MAKE_INTERIOR_CEILINGS:
+        prism('Interior ceiling slab',outline,WALL_HEIGHT,WALL_HEIGHT+.08,paint,
+              'Interior ceilings')
+    root['interior_reference'] = 'User supplied 4690 Deer Creek floorplan, 1440px'
+    root['interior_accuracy'] = 'Manual tracing; not construction or survey geometry'
+
+
+if MAKE_INTERIOR:
+    build_interior()
+
 # -------------------------- roofs --------------------------
 # Roof components remain separately editable. Tiles are suppressed wherever
 # another roof is higher, including the front-facing gable over the bath window.
@@ -875,5 +1360,11 @@ prism('Covered lanai roof',lanai,3.03,3.18,roofmat,'Roofs')
 beam('Lanai rear fascia',pt((607,410),3.08),pt((1100,410),3.08),.18)
 for x in (617,1090):
     box('Lanai support',pt((x,420),1.50),(.20,.20,3.00),stucco,'Trim')
+
+# Optional inspection mode affects generated roof/ceiling collections only.
+# Render visibility, cameras, lights and unrelated scene objects are unchanged.
+if MAKE_INTERIOR and INTERIOR_CUTAWAY:
+    groups['Roofs'].hide_viewport = True
+    groups['Interior ceilings'].hide_viewport = True
 
 # House geometry only: no site, pool, cameras, lights, or presentation setup.
