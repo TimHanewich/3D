@@ -482,4 +482,129 @@ def fit_pool_to_deck_corner():
 
 if FIT_POOL_TO_DECK_CORNER:
     fit_pool_to_deck_corner()
-print('P4690 dry pool fitted to deck corner; left starting X and H4690 unchanged.')
+# White aluminum enclosure FRAME ONLY. Built AFTER pool fitting so the
+# cage stays on the fixed deck/house boundaries, not the pool's scale pivot.
+MAKE_POOL_CAGE = True
+CAGE_EAVE_Z = 3.25
+CAGE_RIDGE_Z = 4.40
+
+
+def pool_cage_frame():
+    white = material('Cage white powder coated aluminum',(.94,.95,.93),.32)
+    # No screen, glass, wall panels, or roof surfaces are generated.
+    def q(p,z):
+        v = xy(p)
+        return Vector((v.x,v.y,z))
+    def member(label,a,b,width=.055,depth=None):
+        a,b = Vector(a),Vector(b)
+        axis = (b-a).normalized()
+        reference = Vector((0,0,1)) if abs(axis.z) < .95 else Vector((1,0,0))
+        u = axis.cross(reference).normalized()*width/2
+        v = axis.cross(u.normalized()).normalized()*(depth or width)/2
+        verts = [tuple(p+u*su+v*sv) for p in (a,b)
+                 for su,sv in [(-1,-1),(1,-1),(1,1),(-1,1)]]
+        return mesh('Cage '+label,verts,
+                    [(0,3,2,1),(4,5,6,7),(0,1,5,4),
+                     (1,2,6,5),(2,3,7,6),(3,0,4,7)],white)
+
+    # Where the waterfall reaches the perimeter, posts sit on its caps
+    # rather than running through the raised platforms.
+    cap_bounds = []
+    for obj in list(root.objects):
+        if obj.type == 'MESH' and 'Waterfall' in obj.name and 'fitted pale cap' in obj.name:
+            vs = [obj.matrix_world @ vert.co for vert in obj.data.vertices]
+            cap_bounds.append((min(v.x for v in vs),max(v.x for v in vs),
+                               min(v.y for v in vs),max(v.y for v in vs),
+                               max(v.z for v in vs)))
+    def footing(p):
+        v = xy(p)
+        height = DECK_Z
+        for x0,x1,y0,y1,z in cap_bounds:
+            if x0-.005 <= v.x <= x1+.005 and y0-.005 <= v.y <= y1+.005:
+                height = max(height,z)
+        return height
+    posts = set()
+    def post(p):
+        key = tuple(p)
+        if key not in posts:
+            member('perimeter post',q(p,footing(p)),q(p,CAGE_EAVE_Z),.075,.075)
+            posts.add(key)
+    def wall_bay(a,b,door=False):
+        post(a); post(b)
+        member('eave header',q(a,CAGE_EAVE_Z),q(b,CAGE_EAVE_Z),.075,.10)
+        if not door:
+            for z in (.78,2.35):
+                member('horizontal rail',q(a,z),q(b,z),.042,.055)
+            # Bottom channel follows the mounting level; split at changes
+            # so no base rail cuts through the waterfall platforms.
+            length = (xy(b)-xy(a)).length
+            count = max(1,math.ceil(length/.06))
+            run_start = 0
+            levels = []
+            for i in range(count):
+                t = (i+.5)/count
+                p = (a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t)
+                levels.append(footing(p)+.025)
+            for i in range(1,count+1):
+                if i == count or abs(levels[i]-levels[run_start]) > .001:
+                    t0,t1 = run_start/count,i/count
+                    p0 = (a[0]+(b[0]-a[0])*t0,a[1]+(b[1]-a[1])*t0)
+                    p1 = (a[0]+(b[0]-a[0])*t1,a[1]+(b[1]-a[1])*t1)
+                    member('base channel',q(p0,levels[run_start]),q(p1,levels[run_start]),.035)
+                    run_start = i
+        else:
+            # An empty framed access door near the house, like the photo.
+            # No opaque kickplate and no screen infill.
+            member('access door header',q(a,2.18),q(b,2.18),.055)
+            av,bv = q(a,0),q(b,0)
+            direction = (bv-av).normalized()
+            av += direction*.055; bv -= direction*.055
+            for v in (av,bv):
+                member('access door stile',v+Vector((0,0,.075)),
+                       v+Vector((0,0,2.125)),.035)
+            for z in (.075,1.00,2.125):
+                member('access door rail',av+Vector((0,0,z)),bv+Vector((0,0,z)),.035)
+
+    # Exposed garden edges. The remaining sides meet the house/lanai;
+    # no fence posts or low rails are placed across the French doors.
+    rear_x = [446,607,737,867,997,1127,1257]
+    for a,b in zip(rear_x,rear_x[1:]):
+        wall_bay((a,84),(b,84))
+    end_y = [84,175,255,324,376,410]
+    for a,b in zip(end_y,end_y[1:]):
+        wall_bay((1257,a),(1257,b),door=(a == 324))
+
+    # Broad peaked roof, ridge along the pool's length. The shorter left
+    # extension ends at the family-room setback instead of covering it.
+    ridge_y = (84+410)/2
+    def roof_z_at(y):
+        return CAGE_EAVE_Z+(CAGE_RIDGE_Z-CAGE_EAVE_Z)*(1-abs(y-ridge_y)/(ridge_y-84))
+    def roof_point(x,y):
+        return q((x,y),roof_z_at(y))
+    for x in rear_x:
+        end = 188 if x < 607 else 410
+        ys = [84]+([ridge_y] if end > ridge_y else [])+[end]
+        for a,b in zip(ys,ys[1:]):
+            member('pitched roof rafter',roof_point(x,a),roof_point(x,b),.07,.10)
+    # Longitudinal roof members subdivide the open roof bays.
+    for y in (136,188,ridge_y,328,410):
+        start = 446 if y <= 188 else 607
+        xs = [start]+[x for x in rear_x if start < x < 1257]+[1257]
+        for a,b in zip(xs,xs[1:]):
+            member('ridge' if y == ridge_y else 'roof purlin',
+                   roof_point(a,y),roof_point(b,y),.055,.07)
+    # Frame the stepped house-side roof boundary without altering H4690.
+    member('setback roof edge',roof_point(446,188),roof_point(607,188),.07,.09)
+    for a,b in [(188,ridge_y),(ridge_y,410)]:
+        member('house-side roof edge',roof_point(607,a),roof_point(607,b),.07,.09)
+    # Uprights supporting the two exposed end roof profiles, above headers.
+    for y in (175,255,324,376):
+        member('end gable upright',q((1257,y),CAGE_EAVE_Z),roof_point(1257,y),.045)
+    # Short ties to the existing eave/lanai height at the setback.
+    for x,y in [(446,188),(607,188)]:
+        member('house attachment upright',q((x,y),CAGE_EAVE_Z),roof_point(x,y),.06)
+
+
+if MAKE_POOL_CAGE:
+    pool_cage_frame()
+print('P4690 dry pool and white open enclosure frame created; H4690 unchanged.')
