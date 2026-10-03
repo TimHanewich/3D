@@ -42,6 +42,15 @@ MAKE_TREE_CROWNS = True
 MAKE_PALMS = True
 MAKE_SMALL_PLANTS = True
 MAKE_PATH_LIGHTS = True  # Geometry only, no actual Blender lights.
+MAKE_BASKETBALL_HOOP = True
+HOOP_POSITION = (-17.55, 1.25)  # Planted west edge, facing into driveway (+X).
+HOOP_RIM_HEIGHT = 3.05          # Visual reconstruction, not measured equipment.
+MAKE_PLANTING_MOUND = True
+PLANTING_MOUND_HEIGHT = .34    # Raised tree/shrub island ONLY; driveway stays flat.
+PLANTING_MOUND_CENTER = (-9.8, -11.0)  # Existing front-left oak island.
+PLANTING_MOUND_RADII = (2.10, 2.65)    # Local planted bank, not the approach.
+MAKE_STOP_SIGN = True
+STOP_SIGN_POSITION = (-11.85, -14.35)  # Grass verge beside driveway entrance.
 FOLIAGE_DENSITY = 1.0   # .5 for lighter geometry; 1.5 for fuller crowns.
 rng = random.Random(SEED)
 
@@ -598,6 +607,226 @@ if MAKE_PATH_LIGHTS:
         tube('Low path light post',[(p.x,p.y,LAWN_Z),(p.x,p.y,.40)],.022,bronze)
         tube('Low path light lens',[(p.x,p.y,.35),(p.x,p.y,.42)],.062,lens,sides=12)
         tube('Low path light cap',[(p.x,p.y,.425),(p.x,p.y,.46)], [.105,.025],bronze,sides=16)
+
+# -------------------------- reference touch-ups --------------------------
+def planting_rise(x,y):
+    # Compact bank beneath the existing street-end tree/shrub island ONLY.
+    # No displacement within the driveway, or outside this small ellipse.
+    if not MAKE_PLANTING_MOUND:
+        return 0.0
+    cx,cy = PLANTING_MOUND_CENTER
+    rx,ry = PLANTING_MOUND_RADII
+    r2 = ((x-cx)/rx)**2+((y-cy)/ry)**2
+    if r2 >= 1 or inside((x,y),drive):
+        return 0.0
+    # Fade out before the paving edge, even if the mound settings are edited.
+    point = Vector((x,y))
+    clearance = float('inf')
+    for a,b in zip(drive,drive[1:]+drive[:1]):
+        av,bv = Vector(a),Vector(b)
+        delta = bv-av
+        t = max(0,min(1,(point-av).dot(delta)/max(delta.length_squared,1e-12)))
+        clearance = min(clearance,(point-av-delta*t).length)
+    edge = max(0,min(1,(clearance-.15)/.40))
+    return PLANTING_MOUND_HEIGHT*(1-r2)**2*edge*edge*(3-2*edge)
+
+
+def shape_front_planting():
+    if not MAKE_PLANTING_MOUND:
+        return
+    cx,cy = PLANTING_MOUND_CENTER
+    rx,ry = PLANTING_MOUND_RADII
+    lower,upper = cy-ry,cy+ry
+    left,right = cx-rx,cx+rx
+    # Hardscape is intentionally excluded: driveway, joints, aprons, walk,
+    # street and curb retain their ORIGINAL, FLAT geometry on every rerun.
+    for group in ('Ground','Beds'):
+        for ob in list(groups[group].objects):
+            if ob.type != 'MESH':
+                continue
+            coords = [v.co for v in ob.data.vertices]
+            if not coords or max(p.y for p in coords) <= lower or min(p.y for p in coords) >= upper:
+                continue
+            if max(p.x for p in coords) <= left or min(p.x for p in coords) >= right:
+                continue
+            bm = bmesh.new()
+            bm.from_mesh(ob.data)
+            try:
+                for axis,start,end,spacing in ((1,lower,upper,.18),
+                                               (0,left,right,.18)):
+                    count = max(1,math.ceil((end-start)/spacing))
+                    for i in range(count+1):
+                        value = start+(end-start)*i/count
+                        co = [0.0,0.0,0.0]; co[axis] = value
+                        normal = [0.0,0.0,0.0]; normal[axis] = 1.0
+                        bmesh.ops.bisect_plane(bm,
+                            geom=list(bm.verts)+list(bm.edges)+list(bm.faces),
+                            dist=.000001,plane_co=Vector(co),plane_no=Vector(normal),
+                            clear_inner=False,clear_outer=False)
+                bmesh.ops.triangulate(bm,faces=list(bm.faces))
+                for vertex in bm.verts:
+                    vertex.co.z += planting_rise(vertex.co.x,vertex.co.y)
+                bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces))
+                bm.to_mesh(ob.data)
+                ob.data.update()
+            finally:
+                bm.free()
+    # Move the existing oak as one rigid assembly onto its planted bank.
+    for ob in groups['Trees'].objects:
+        if ob.name.startswith(PREFIX+'_Front west shade oak'):
+            ob.location.z += planting_rise(-9.8,-11.0)
+    # Understory shrubbery on this specific island, as shown in the photo.
+    # Each complete plant is seated at its own ground height, not distorted.
+    if MAKE_SMALL_PLANTS:
+        for i,(x,y) in enumerate([(-10.75,-11.45),(-9.75,-12.15),
+                                  (-8.75,-11.65),(-8.65,-10.6),(-10.0,-9.8)]):
+            before = set(groups['Shrubs'].objects)
+            shrub('Raised street-end island shrub %02d'%i,x,y,.58,.95)
+            for ob in set(groups['Shrubs'].objects)-before:
+                ob.location.z += planting_rise(x,y)
+    root['Planting island rise meters'] = PLANTING_MOUND_HEIGHT
+    root['Driveway grade'] = 'Flat; raised terrain confined to street-end tree/shrub island'
+
+
+shape_front_planting()
+
+
+def portable_basketball_hoop():
+    hx,hy = HOOP_POSITION
+    ground = PAVING_Z  # The driveway and hoop base remain flat.
+    black = material('Hoop charcoal molded base',(.022,.027,.030),roughness=.62)
+    steel = material('Hoop black painted steel',(.035,.045,.047),roughness=.36)
+    orange = material('Hoop orange rim',(.72,.13,.018),roughness=.40)
+    white = material('Hoop white net and target',(.89,.88,.81),roughness=.75)
+    clear = material('Hoop clear backboard',(.88,.96,.95),roughness=.10)
+    shader = clear.node_tree.nodes.get('Principled BSDF')
+    shader.inputs['Transmission Weight'].default_value = 1.0
+    shader.inputs['IOR'].default_value = 1.46
+    # Local u = along board (+Y); v = into playing area (+X).
+    def q(u,v,z):
+        return Vector((hx+v,hy+u,ground+z))
+    def member(label,a,b,radius=.025,mat=steel):
+        return tube('Basketball '+label,[q(*a),q(*b)],radius,mat,'Details',10)
+    base = box('Basketball portable weighted base',q(0,-.22,.115),
+               (1.12,.83,.20),black)
+    bevel = base.modifiers.new('Rounded molded base corners','BEVEL')
+    bevel.width = .075
+    bevel.segments = 3
+    # Raised molding, fill cap, axle and two small transport wheels.
+    box('Basketball base molded inset',q(0,-.23,.224),(.69,.54,.018),steel)
+    member('base filling plug',(0,-.54,.23),(0,-.54,.246),.055,black)
+    member('wheel axle',(-.46,-.65,.09),(.46,-.65,.09),.025)
+    for side in (-1,1):
+        member('transport wheel',(side*.36,-.65,.095),(side*.47,-.65,.095),.095,black)
+    member('main upright',(0,.0,.19),(0,-.15,2.48),.061)
+    member('telescoping upper pole',(0,-.15,1.65),(0,-.16,2.76),.047)
+    for side in (-1,1):
+        member('base diagonal brace',(side*.32,-.52,.20),(0,-.03,1.12),.023)
+        member('upper angled support',(side*.12,-.16,2.47),(side*.30,.39,3.27),.024)
+        member('lower board support',(side*.08,-.15,2.15),(side*.32,.39,3.02),.024)
+    member('height adjustment pin',(-.105,-.095,1.80),(.105,-.095,1.80),.017)
+    box('Basketball pole orange label',q(-.062,-.04,1.88),(.11,.006,.22),orange)
+    rim_z = HOOP_RIM_HEIGHT
+    bottom,top = rim_z-.08,rim_z+.80
+    board_v = .42
+    board = box('Basketball transparent rectangular backboard',
+                q(0,board_v,(bottom+top)/2),(.022,1.28,top-bottom),clear)
+    # Borders and white target are actual modeled strips, not textures.
+    corners = [(-.64,board_v+.018,bottom),(.64,board_v+.018,bottom),
+               (.64,board_v+.018,top),(-.64,board_v+.018,top)]
+    for a,b in zip(corners,corners[1:]+corners[:1]):
+        member('backboard perimeter',a,b,.022)
+    target = [(-.245,board_v+.033,rim_z+.015),(.245,board_v+.033,rim_z+.015),
+              (.245,board_v+.033,rim_z+.365),(-.245,board_v+.033,rim_z+.365)]
+    for a,b in zip(target,target[1:]+target[:1]):
+        member('white target rectangle',a,b,.010,white)
+    box('Basketball rim mounting plate',q(0,board_v+.055,rim_z-.035),(.055,.16,.16),orange)
+    member('rim mounting arm',(0,board_v+.05,rim_z),(0,board_v+.11,rim_z),.022,orange)
+    center_v = board_v+.10+.23
+    # Closed tube ring with evenly spaced points, no external assets.
+    ring = [q(.23*math.cos(a),center_v+.23*math.sin(a),rim_z)
+            for a in [math.tau*i/64 for i in range(65)]]
+    tube('Basketball orange steel rim',ring,.0095,orange,'Details',8)
+    # Counter-wound cord strands create an open diamond net, not a cone.
+    for i in range(12):
+        start = i*math.tau/12
+        for direction in (-1,1):
+            points = []
+            for j in range(17):
+                t = j/16
+                angle = start+direction*t*math.tau/6
+                radius = .23-(.23-.135)*min(1,t*1.5)
+                points.append(q(radius*math.cos(angle),center_v+radius*math.sin(angle),rim_z-.012-.43*t))
+            tube('Basketball woven net strand',points,.0027,white,'Details',5)
+    root['Basketball reference'] = 'Portable dark base, clear board, orange rim, open white net; photo-estimated'
+
+
+if MAKE_BASKETBALL_HOOP:
+    portable_basketball_hoop()
+
+
+def street_stop_sign():
+    sx,sy = STOP_SIGN_POSITION
+    base_z = LAWN_Z+planting_rise(sx,sy)
+    metal = material('Stop sign aluminum back',(.43,.46,.45),roughness=.40)
+    red = material('Stop sign red face',(.62,.018,.020),roughness=.43)
+    white = material('Stop sign white border and letters',(.95,.94,.87),roughness=.45)
+    postmat = material('Street sign dark painted post',(.035,.045,.039),roughness=.5)
+    # Face west along the modeled street, rather than toward the front door.
+    # Local u runs -Y, outward depth runs -X, Z is vertical.
+    def q(u,depth,z):
+        return Vector((sx-depth,sy-u,base_z+z))
+    def member(label,a,b,r=.03,mat=postmat):
+        return tube('Street sign '+label,[q(*a),q(*b)],r,mat,'Details',10)
+    member('round dark post',(0,-.07,0),(0,-.07,3.16),.037)
+    member('post foot collar',(0,-.07,0),(0,-.07,.16),.072)
+    member('top finial',(0,-.07,3.16),(0,-.07,3.23),[.065,.008])
+    center_z = 2.39
+    def octagon(label,radius,depth0,depth1,mat):
+        outline = [(radius*math.cos(math.pi/8+i*math.tau/8),
+                    center_z+radius*math.sin(math.pi/8+i*math.tau/8)) for i in range(8)]
+        verts = [tuple(q(u,depth,z)) for depth in (depth0,depth1) for u,z in outline]
+        faces = [tuple(reversed(range(8))),tuple(range(8,16))]
+        faces += [(i,(i+1)%8,(i+1)%8+8,i+8) for i in range(8)]
+        return mesh('Street sign '+label,verts,faces,mat,'Details')
+    # Layered solid plate leaves a narrow white octagonal border.
+    octagon('octagonal metal backing',.43,-.012,0,metal)
+    octagon('white octagonal border',.424,.001,.004,white)
+    octagon('red inset face',.394,.005,.007,red)
+    for z in (center_z-.29,center_z+.29):
+        member('mounting bolt',(0,.008,z),(0,.014,z),.012,metal)
+    text = bpy.data.curves.new(PREFIX+'_STOP lettering',type='FONT')
+    text.body = 'STOP'
+    text.align_x = 'CENTER'
+    text.align_y = 'CENTER'
+    text.size = .225
+    text.extrude = .0007
+    text.resolution_u = 6
+    ob = bpy.data.objects.new(PREFIX+'_Street sign STOP',text)
+    groups['Details'].objects.link(ob)
+    ob.location = q(0,.010,center_z)
+    ob.rotation_euler = (math.pi/2,0,-math.pi/2)
+    text.materials.append(white)
+    # Slim street-name blade above, as visible in the reference. No invented
+    # second street name; lettering is on both sides of this one blade.
+    blade = box('Street sign road-name blade',q(0,-.07,2.98),(.023,1.10,.16),postmat)
+    for front in (True,False):
+        label = bpy.data.curves.new(PREFIX+'_Street name text',type='FONT')
+        label.body = 'DEER CREEK BLVD'
+        label.align_x = 'CENTER'
+        label.align_y = 'CENTER'
+        label.size = .070
+        label.extrude = .0003
+        obj = bpy.data.objects.new(PREFIX+'_Street name lettering',label)
+        groups['Details'].objects.link(obj)
+        obj.location = q(0,-.055 if front else -.085,2.98)
+        obj.rotation_euler = (math.pi/2,0,-math.pi/2 if front else math.pi/2)
+        label.materials.append(white)
+    root['Street sign reference'] = 'Estimated verge location; decorative model, not traffic engineering'
+
+
+if MAKE_STREET and MAKE_STOP_SIGN:
+    street_stop_sign()
 
 # Reference-only metadata travels with the generated collection.
 root['Coordinate system'] = 'Meters; same xy() origin as house.py and pool.py; front -Y'
