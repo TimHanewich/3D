@@ -310,8 +310,52 @@ double_entry((772,902))
 for p,w,z in [((160,250),.80,.85),((160,474),.64,1.40),((160,633),1.20,.76),
               ((201,216),.94,.83)]:
     opening('West elevation window',p,w,z,2.36,0)
+def pool_bath_door():
+    # Pool-facing side of the bath projection: wall (446,84)-(446,188).
+    p = (446,136)
+    name = 'Pool bath exterior door'
+    width, bottom, top = .96, .035, 2.20
+    wall,u2 = nearest_wall(p)
+    u = Vector((*u2,0)); n = Vector((-u.y,u.x,0)); base = Vector(pt(p))
+    def q(x,z,offset):
+        return base+u*x+n*offset+Vector((0,0,z))
+    def rectangle(x0,x1,z0,z1):
+        return [(x0,z0),(x1,z0),(x1,z1),(x0,z1)]
+    profile = rectangle(-width/2,width/2,bottom,top)
+    difference(wall,facade_prism('Pool bath door cutter',p,u2,profile,.65,0,None))
+    finish = material('Pool bath door ivory paint', (.83, .81, .70), .40)
+    hardware = material('Pool bath door bronze hardware', (.16, .105, .045), .28)
+    hardware.node_tree.nodes.get('Principled BSDF').inputs['Metallic'].default_value = .75
+    facade_prism(name+' dark reveal',p,u2,profile,.018,0,shadow)
+    facade_prism(name+' solid leaf',p,u2,
+                 rectangle(-width/2+.035,width/2-.035,bottom+.012,top-.035),
+                 .09,0,finish)
+    for sign in (-1,1):
+        off = sign*.145
+        for x in (-width/2,width/2):
+            beam(name+' jamb trim',q(x,bottom,off),q(x,top,off),.075)
+        beam(name+' header trim',q(-width/2,top,off),q(width/2,top,off),.075)
+        for low,high in [(.20,.86),(1.08,2.02)]:
+            panel = rectangle(-width/2+.14,width/2-.14,low,high)
+            facade_prism(name+' raised panel',p,u2,panel,.02,sign*.052,finish)
+            for i,(x,z) in enumerate(panel):
+                xx,zz = panel[(i+1)%len(panel)]
+                beam(name+' panel molding',q(x,z,sign*.064),
+                     q(xx,zz,sign*.064),.022,trim,'Openings')
+        x = width/2-.14
+        facade_prism(name+' handle backplate',p,u2,
+                     rectangle(x-.025,x+.025,.93,1.07),.02,sign*.063,hardware)
+        beam(name+' handle stem',q(x,1.0,sign*.065),
+             q(x,1.0,sign*.105),.022,hardware,'Openings')
+        beam(name+' lever handle',q(x,1.0,sign*.105),
+             q(x-.10,1.0,sign*.105),.022,hardware,'Openings')
+    facade_prism(name+' threshold',p,u2,
+                 rectangle(-width/2,width/2,.01,bottom+.012),.30,0,coping)
+
+
 if INCLUDE_POOL_BATH:
     opening('Pool bath window',(300,155),.60,1.55,2.38,0)
+    pool_bath_door()
 for p,w in [((1257,460),1.20),((1200,414),1.40)]:
     opening('Master sitting window',p,w,.70,2.45,.20)
 # Large rear sliding glass openings on the lanai.
