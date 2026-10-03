@@ -362,11 +362,102 @@ for a,b in [(541,684),(684,845),(845,1011)]:
         center = Vector(pt(p))
         beam('Porch arch molding',center+Vector(((width-.29)/2*math.cos(t0),-.19,2.23+.65*math.sin(t0))),
              center+Vector(((width-.29)/2*math.cos(t1),-.19,2.23+.65*math.sin(t1))),.065)
-# Small white decorative gate at recessed entry, visible in reference.
-for x in range(733,816,9):
-    beam('Entry gate picket',pt((x,1042),.08),pt((x,1042),.89+.17*math.sin((x-733)/83*math.pi)),.023)
-for z in (.23,.73):
-    beam('Entry gate rail',pt((727,1042),z),pt((821,1042),z),.035)
+# White ornamental double gate with fixed side panels, photo-inspired.
+# Fit the center porch bay rather than leaving a short floating fence.
+def front_gate():
+    paint = material('Gate white enamel', (.94, .93, .88), .30)
+    base = Vector(pt(((684+845)/2,1068)))
+    half_span = (845-684)*SCALE/2-.145
+    half_gate = .78
+    gap = .014
+    bottom = .12
+    def q(x,z,y=0):
+        return base+Vector((x,y,z))
+    def top(x):
+        # Raised center, gently descending shoulders toward the piers.
+        return 1.16+.49*(.5+.5*math.cos(math.pi*x/half_span))
+    def bar(name,x0,z0,x1,z1,width=.025,y=0):
+        return beam('Entry gate '+name,q(x0,z0,y),q(x1,z1,y),width,paint,'Trim')
+    def rod(name,points,radius=.012,y=0):
+        # Round-section metalwork, kept as one mesh per continuous curve.
+        verts, faces = [], []
+        count = len(points)
+        for i,(x,z) in enumerate(points):
+            a = points[max(0,i-1)]; b = points[min(count-1,i+1)]
+            dx,dz = b[0]-a[0],b[1]-a[1]
+            length = math.hypot(dx,dz)
+            nx,nz = -dz/length,dx/length
+            for j in range(8):
+                angle = 2*math.pi*j/8
+                c,s = math.cos(angle),math.sin(angle)
+                verts.append(tuple(q(x+radius*c*nx,z+radius*c*nz,y+radius*s)))
+        for i in range(count-1):
+            for j in range(8):
+                a = i*8+j; b = i*8+(j+1)%8
+                faces.append((a,b,b+8,a+8))
+        faces += [tuple(reversed(range(8))),tuple(range((count-1)*8,count*8))]
+        ob = mesh('Entry gate '+name,verts,faces,paint,'Trim')
+        for polygon in ob.data.polygons:
+            if len(polygon.vertices) == 4:
+                polygon.use_smooth = True
+    def finial(x,z):
+        # Small spear-shaped tips, not oversized fence spikes.
+        verts = [tuple(q(x,z)),tuple(q(x-.027,z+.045)),
+                 tuple(q(x,z+.045,-.021)),tuple(q(x+.027,z+.045)),
+                 tuple(q(x,z+.045,.021)),tuple(q(x,z+.12))]
+        faces = [(0,2,1),(0,3,2),(0,4,3),(0,1,4),
+                 (5,1,2),(5,2,3),(5,3,4),(5,4,1)]
+        mesh('Entry gate spear finial',verts,faces,paint,'Trim')
+
+    # Two independent leaves and two stationary infill panels.
+    sections = [('left side',-half_span,-half_gate-.035),
+                ('left leaf',-half_gate+gap,-gap),
+                ('right leaf',gap,half_gate-gap),
+                ('right side',half_gate+.035,half_span)]
+    for label,a,b in sections:
+        for x in (a,b):
+            bar(label+' stile',x,bottom,x,top(x),.035)
+        bar(label+' bottom rail',a,bottom,b,bottom,.035)
+        bar(label+' lower rail',a,.27,b,.27,.025)
+        rod(label+' curved top',[(a+(b-a)*i/40,top(a+(b-a)*i/40))
+                                for i in range(41)],.018)
+        count = max(2,round((b-a)/.12))
+        for i in range(1,count):
+            x = a+(b-a)*i/count
+            z = top(x)+.065
+            bar(label+' upright',x,bottom,x,z,.018)
+            finial(x,z)
+
+    # Slender hinge posts, caps, and visible hinge collars.
+    for x in (-half_gate-.018,half_gate+.018):
+        bar('hinge post',x,.035,x,top(x)+.13,.055)
+        box('Entry gate post cap',q(x,top(x)+.13),(.075,.075,.035),paint,'Trim')
+        for z in (.37,1.17):
+            box('Entry gate hinge',q(x,z,-.012),(.085,.075,.07),paint,'Trim')
+    for x in (-half_span,half_span):
+        for z in (.30,1.10):
+            box('Entry gate pier fixing',q(x,z),(.07,.09,.08),paint,'Trim')
+
+    # Mirrored C-scroll flourishes near the meeting stiles. Each belongs
+    # to its own leaf; nothing bridges the opening except the latch.
+    for side in (-1,1):
+        for zc,flip in [(.72,1),(1.02,-1)]:
+            points = []
+            for i in range(65):
+                t = i/64
+                angle = -math.pi/2+t*2.2*math.pi
+                radius = .13*(1-.78*t)
+                points.append((side*(.18+radius*math.cos(angle)),
+                               zc+flip*radius*math.sin(angle)))
+            rod('ornamental scroll',points,.009,-.035)
+        # Swept stem ties the scrolls into the lower framework.
+        rod('scroll stem',[(side*(.10+.06*math.sin(math.pi*i/40)),
+                            .27+.89*i/40) for i in range(41)],.009,-.035)
+        rod('handle',[(side*.065,.83),(side*.065,.98)],.014,-.07)
+    box('Entry gate latch',q(0,.92,-.045),(.12,.05,.035),paint,'Trim')
+
+
+front_gate()
 # Quoin-like corner blocks seen on the garage wing.
 for x,y in [(186,1240),(524,1240),(160,216),(1257,414)]:
     for z in (.36,.85,1.34,1.83,2.32,2.81):
