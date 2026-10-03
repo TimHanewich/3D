@@ -900,7 +900,8 @@ def build_interior():
     partition('Laundry west wall',(300,758),(300,813))
     partition('Laundry passage wall',(463,730),(463,813),[(35,44,'open')])
     partition('Garage to laundry',(300,813),(524,813),[(170,46,'door')])
-    partition('Garage east return',(524,813),(524,990))
+    # The Dining west wall below already covers x=524, y=788..990.
+    # Do not generate a second wall/skirting over its y=813..990 section.
 
     # Preserve the living/kitchen divider and its existing openings.
     # In the kitchen reference photo, this divider is on the LEFT.
@@ -920,7 +921,18 @@ def build_interior():
     dining_opening_length = math.hypot(708-641,848-788)
     partition('Dining diagonal opening',(641,788),(708,848),
               [(0,dining_opening_length,'open')])
-    partition('Dining entry return',(708,848),(708,902))
+    # Waist-high divider immediately left when entering the front door.
+    dining_half_wall_top = fz+.95
+    segment('Dining entry half wall',(708,848),(708,902),
+            fz,dining_half_wall_top,thick,paint,'Interior walls')
+    segment('Dining entry half wall cap',(708,848),(708,902),
+            dining_half_wall_top,dining_half_wall_top+.035,
+            thick+.04,trim,'Interior walls')
+    for side in (-1,1):
+        skirting = segment('Dining entry half wall skirting',
+                           (708,848),(708,902),fz,fz+.105,.018,
+                           trim,'Interior walls')
+        skirting.location.x += side*(thick/2+.009)
     # Join the diagonal entrance to the existing exterior west wall.
     partition('Study west entry return',(836,848),(836,902))
     # Reversed endpoints hinge the leaf at the north jamb and swing it
@@ -942,8 +954,8 @@ def build_interior():
     partition('Master closet lower diagonal',(1198,895),(1162,924))
     partition('Master closet lower return',(1162,924),(1162,956))
     partition('Master closet south',(1162,956),(1280,956))
-    partition('Master bath linen front',(1032,924),(1085,924),[(7,39,'closet')])
-    partition('Master bath linen shelf wall',(1032,948),(1085,948))
+    # No floor-standing linen closet beside the master vanity.
+    # A shallow wall-mounted medicine cabinet is built below instead.
     partition('Master toilet room north',(1032,1005),(1085,1005))
     partition('Master toilet room east',(1085,1005),(1085,1080),[(9,44,'door')])
     if INCLUDE_POOL_BATH:
@@ -964,7 +976,10 @@ def build_interior():
                               (641,788),(524,788),(524,813),(463,813)]),
         ('Shared bath',[(160,431),(320,431),(320,548),(160,548)]),
         ('Shared bath passage',[(320,431),(367,431),(367,548),(320,548)]),
-        ('Master bath',[(1032,796),(1162,796),(1198,827),(1198,895),
+        # Continue to the bedroom threshold at y=740, and follow the
+        # actual closet return/diagonal rather than stopping at y=796.
+        ('Master bath',[(1032,796),(1085,796),(1085,740),(1162,740),
+                         (1162,774),(1198,805),(1198,895),
                          (1162,924),(1162,956),(1255,956),(1255,1082),
                          (1195,1082),(1195,1110),(1085,1110),(1085,1080),
                          (1032,1080)]),
@@ -1319,6 +1334,8 @@ def build_interior():
         unit('fridge bridge',(589,712),52*SCALE,'north',
              depth=.34,low=2.16,high=2.40)
 
+        # Capture the island assembly so every component moves together.
+        island_before = set(root.all_objects)
         # Two-level sink bar, with seating toward the living-room divider.
         # Leave a circulation gap between its south end and rear counter.
         unit('sink base',(543,580),58*SCALE,'west',depth=.64)
@@ -1421,6 +1438,8 @@ def build_interior():
             beam('Kitchen bar bracket',pt((580,y),.91),
                  pt((594,y),1.075),.045,white,cg)
 
+        island_objects = set(root.all_objects)-island_before
+
         # Soffits and recessed lenses; leave scene lighting unchanged.
         block('west soffit',(370,601,400,735),2.43,2.68)
         block('rear soffit',(400,704,618,735),2.43,2.68)
@@ -1442,6 +1461,7 @@ def build_interior():
             oval('Kitchen canister lid',(x,718),.07,.07,
                  [(.946+h,1),(.963+h,1)],white)
 
+        stools_before = set(root.all_objects)
         if MAKE_KITCHEN_FURNITURE:
             group = 'Interior furniture'
             for y in (558,597,636):
@@ -1468,6 +1488,14 @@ def build_interior():
                      center+Vector((.25,-.24,1.36)),
                      center+Vector((.25,.24,1.36)),
                      .055,honey,group)
+
+        island_objects.update(set(root.all_objects)-stools_before)
+        island_shift_x = -.40  # Meters toward the west kitchen run.
+        for ob in island_objects:
+            ob.location.x += island_shift_x
+        root['kitchen_island_shift_x'] = island_shift_x
+        # Retain the south/fridge gap; only world X changes.
+        assert (540-409)*SCALE+island_shift_x > 1.80
 
         root['kitchen_reference'] = (
             'Photo overhaul V3; living divider at photo left; '
@@ -1644,7 +1672,20 @@ def build_interior():
     closet('Bedroom 2 wardrobe',(169,735,293,751))
     closet('Study storage',(940,802,1025,821))
     closet('Shared bath linen',(256,526,313,541),(.35,.70,1.05,1.40,1.75))
-    closet('Master bath linen',(1039,931,1077,942),(.35,.70,1.05,1.40,1.75))
+    # Small medicine cabinet on the vanity wall; dimensions estimated
+    # from the written description, not a floor-to-ceiling enclosure.
+    med_back = 1032+thick/(2*SCALE)
+    med_front = med_back+.12/SCALE
+    rect('Master medicine cabinet body',(med_back,925,med_front,947),
+         1.18,1.88,cabinet)
+    rect('Master medicine cabinet mirror',
+         (med_front,926,med_front+.3,946),1.21,1.85,metal)
+    for y in (925,947):
+        beam('Master medicine cabinet side trim',pt((med_front,y),1.18),
+             pt((med_front,y),1.88),.025,trim,'Interior cabinetry')
+    for z in (1.18,1.88):
+        beam('Master medicine cabinet horizontal trim',pt((med_front,925),z),
+             pt((med_front,947),z),.025,trim,'Interior cabinetry')
     closet('Master walk-in north shelving',(1170,749,1245,773))
     closet('Master walk-in south shelving',(1170,927,1269,949))
     for z in (.36,.72,1.08,1.44,1.80):
