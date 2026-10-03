@@ -1496,53 +1496,82 @@ def build_interior():
     tub('Master soaking tub',(1095,1058,1181,1103))
     def master_walk_in_shower():
         group = 'Interior fixtures'
-        a,b,c,d = 1200,964,1248,1076
-        entry_end = 1008
-        top = 2.18
-        # A low tray, with no rail or curb crossing the west-side entrance.
-        rect('Master shower tray',(a,b,c,d),fz,fz+.025,ceramic,group)
-        rect('Master shower drain',(1221,1043,1227,1049),
-             fz+.025,fz+.028,metal,group)
-        # Tile linings meet the existing closet and exterior wall faces.
-        # They also meet one another at both east corners.
+        # Enlarged photo-estimated footprint, without moving the tub or shell.
+        # Positive plan Y points toward the FRONT of the house.
+        a,b,c,d = 1188,964,1248,1076
+        entry_end = 1014
+        top = 2.50
+        wall_outer = a-thick/SCALE
         east_wall_face = 1255-WALL_THICKNESS/(2*SCALE)
         south_wall_face = 1082-WALL_THICKNESS/(2*SCALE)
         north_wall_face = 956+thick/(2*SCALE)
+        rect('Master shower tray',(a,b,c,d),fz,fz+.025,ceramic,group)
+        center_x = (a+c)/2
+        rect('Master shower drain',(center_x-3,1051,center_x+3,1057),
+             fz+.025,fz+.028,metal,group)
         rect('Master shower north tiled wall',
-             (a,north_wall_face-.2,east_wall_face+.2,b),fz,top,tile,group)
+             (wall_outer,north_wall_face-.2,east_wall_face+.2,b),fz,top,tile,group)
         rect('Master shower east tiled wall',
              (c,b,east_wall_face+.2,south_wall_face+.2),fz,top,tile,group)
         rect('Master shower south tiled wall',
-             (a,d-1,east_wall_face+.2,south_wall_face+.2),fz,top,tile,group)
-        # Fixed west screen shields the spray zone; entry is y=964..1008.
-        segment('Master shower screen base',(a,entry_end),(a,d-1),
-                fz,fz+.065,.045,ceramic,group)
-        segment('Master shower fixed glass',(a,entry_end),(a,d-1),
-                fz+.065,top,.012,shower_glass,group)
-        for y in (entry_end,d-1):
-            beam('Master shower screen post',pt((a,y),fz+.025),
-                 pt((a,y),top),.025,metal,group)
-        beam('Master shower glass top rail',pt((a,entry_end),top),
-             pt((a,d-1),top),.025,metal,group)
-        beam('Master shower screen brace',pt((a,entry_end),top),
-             pt((c,entry_end),top),.022,metal,group)
-        # East-wall fittings point west into the rear of the enclosure.
-        mount = (c-2,1045)
-        for z in (1.08,1.92):
-            beam('Master shower riser fixing',pt((c,1045),z),
+             (wall_outer,d-1,east_wall_face+.2,south_wall_face+.2),fz,top,tile,group)
+
+        # Bathroom-facing partition replaces the old full glass screen.
+        # Build around an actual viewing opening: no solid wall behind glass.
+        # The north end remains a doorless, unobstructed walk-in entrance.
+        win_a,win_b = 1021,1066
+        sill,lintel = fz+1.10,fz+2.02
+        for label,y0,y1,z0,z1 in [
+                ('entry pier',entry_end,win_a,fz,top),
+                ('far pier',win_b,d-1,fz,top),
+                ('below window',win_a,win_b,fz,sill),
+                ('above window',win_a,win_b,lintel,top)]:
+            rect('Master shower window wall '+label,
+                 (wall_outer,y0,a,y1),z0,z1,tile,group)
+        # Pale stone reveals finish all four sides of the inset window.
+        trim_px = .025/SCALE
+        for y in (win_a,win_b):
+            rect('Master shower window jamb',
+                 (wall_outer-.15,y-trim_px/2,a+.15,y+trim_px/2),
+                 sill,lintel,stone,group)
+        for z in (sill,lintel):
+            rect('Master shower window horizontal reveal',
+                 (wall_outer-.15,win_a,a+.15,win_b),
+                 z-.0125,z+.0125,stone,group)
+        glass_x = (wall_outer+a)/2
+        segment('Master shower viewing window glass',
+                (glass_x,win_a+trim_px/2),(glass_x,win_b-trim_px/2),
+                sill+.0125,lintel-.0125,.01,shower_glass,group)
+
+        # Controls and shower head are on the far SOUTH/front-of-house wall.
+        # Their projection is northward (+world Y), into the shower.
+        mount = (center_x,d-3)
+        for z in (1.08,2.02):
+            beam('Master shower riser fixing',pt((center_x,d-1),z),
                  pt(mount,z),.03,metal,group)
         beam('Master shower riser',pt(mount,1.02),
-             pt(mount,2.05),.026,metal,group)
-        head = Vector(pt(mount,2.05))+Vector((-.35,0,0))
-        beam('Master shower arm',pt(mount,2.05),head,.026,metal,group)
+             pt(mount,2.16),.026,metal,group)
+        head = Vector(pt(mount,2.16))+Vector((0,.35,0))
+        beam('Master shower arm',pt(mount,2.16),head,.026,metal,group)
         box('Master shower rain head',head+Vector((0,0,-.02)),
-            (.22,.22,.04),metal,group)
-        box('Master shower mixer',pt((c-1,1045),1.05),
-            (.04,.12,.12),metal,group)
-        # Geometry checks run whenever the model is regenerated.
-        assert (entry_end-b)*SCALE-.025/2 > .80
-        assert (c-a)*SCALE > .85
-        assert entry_end < 1045 < d-1
+            (.24,.24,.04),metal,group)
+        box('Master shower mixer',pt((center_x,d-2),1.05),
+            (.12,.04,.12),metal,group)
+        beam('Master shower mixer spindle',pt((center_x,d-2),1.05),
+             pt((center_x,d-5),1.05),.025,metal,group)
+        beam('Master shower mixer lever',pt((center_x,d-5),1.05),
+             pt((center_x+4,d-5),1.05),.018,metal,group)
+
+        # These geometry checks run when the script is regenerated.
+        assert (entry_end-b)*SCALE > .90
+        assert (c-a)*SCALE > 1.10
+        assert wall_outer > 1181  # Keep clear of the existing soaking tub.
+        assert entry_end < win_a < win_b < d-1
+        assert b < d-3-.35/SCALE < d-1
+        root['master_shower_reference'] = (
+            'User description: large walk-in, interior viewing window, '
+            'south-wall controls/head; dimensions estimated'
+        )
 
     master_walk_in_shower()
     if INCLUDE_POOL_BATH:
