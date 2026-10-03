@@ -1287,14 +1287,48 @@ def build_interior():
         beam('Kitchen dishwasher pull',pt((540,613),.76),
              pt((540,636),.76),.027,metal,fg)
         block('bar closed end',(543,639,578,641),fz,.905)
-        block('bar beadboard backing',(577,550,580,641),fz,1.095)
-        for y in range(551,641,2):
+        block('bar beadboard backing',(577,556,580,641),fz,1.095)
+        for y in range(557,641,2):
             block('beadboard groove',(580,y,580.18,y+.20),
                   fz+.09,1.08,inset)
-        for y in (551,640):
+        for y in (557,640):
             block('bar end post',(577,y-1,582,y+1),fz,1.10)
 
-        top = block('sink bar granite',(540,548,580,643),
+        # The diagram has a 45-degree change of direction (135-degree
+        # inside angle), not a square L or a small clipped corner.
+        def island_slab(name, polygon, low, high, mat):
+            return prism(name, polygon, low, high, mat, cg)
+
+        # Closed custom carcass follows the diagonal; no backwards-facing
+        # rectangular unit protrudes into the working aisle.
+        return_body = [(524,500),(576,552),(543,552),
+                       (543,565),(500,522)]
+        island_slab('Kitchen diagonal return cabinet',return_body,
+                    fz+.10,.905,white)
+        island_slab('Kitchen diagonal return plinth',
+                    [(524,503),(572,551),(541,551),(541,560),(504,523)],
+                    fz,fz+.10,dark)
+        island_slab('Kitchen diagonal beadboard backing',
+                    [(523,499),(580,556),(577,557.24),(520.88,501.12)],
+                    fz,1.095,white)
+        # Vertical beading and trim follow the actual diagonal face.
+        for i in range(1,39):
+            t = i/39
+            p = (523+57*t+.10,499+57*t-.10)
+            segment('Kitchen diagonal beadboard groove',p,
+                    (p[0]+.14,p[1]+.14),fz+.09,1.08,.003,inset,cg)
+        for z in (fz+.08,1.065):
+            beam('Kitchen diagonal backing trim',pt((523,499),z),
+                 pt((580,556),z),.035,white,cg)
+        for t in (.22,.65):
+            x,y = 523+57*t,499+57*t
+            beam('Kitchen diagonal bar bracket',pt((x,y),.91),
+                 pt((x+10,y-10),1.075),.045,white,cg)
+
+        # Both long edges turn diagonally, with a continuous mitered slab.
+        top = island_slab('Kitchen sink bar granite',
+                    [(522,496),(580,554),(580,643),(540,643),
+                     (540,570.57),(493.72,524.28)],
                     .905,.945,granite)
         for y in (570,592):
             cutter = rect('Kitchen sink cutter',
@@ -1336,7 +1370,11 @@ def build_interior():
             beam('Kitchen high arch faucet',a,b,.025,metal,fg)
         beam('Kitchen faucet lever',pt((575,584),.99),
              pt((575,588),1.08),.018,metal,fg)
-        soft(block('raised breakfast ledge',(578,546,603,643),
+        # Constant-width ledge: one straight arm plus one diagonal arm.
+        # Miter both edges at the bend rather than retaining a square elbow.
+        soft(island_slab('Kitchen raised breakfast ledge',
+                        [(521,497),(538.68,479.32),(603,543.64),
+                         (603,643),(578,643),(578,554)],
                    1.095,1.14,granite))
         for y in (557,590,632):
             beam('Kitchen bar bracket',pt((580,y),.91),
