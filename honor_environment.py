@@ -16,6 +16,10 @@ Species, distances, street radius and lot boundaries are visual approximations,
 NOT surveyed measurements. No retention pond, distant roads, utility corridor,
 vehicles or neighboring houses. Open neighboring lots are continuous grass:
 there are intentionally no invented property fences or painted boundary lines.
+User opposite-lot revision: grass extends 38 meters from the far road edge,
+following the street curve, with flat potential home sites and subtle rear-lawn
+relief. The existing opposite sidewalk is retained with a grass cutout below it.
+Opposite lot depth and grading are inferred and adjustable below.
 
 Coordinates: meters, +Y rear, front faces -Y, matching honor_exterior.py.
 Reads the house foundation transform; follows its placement when regenerated.
@@ -51,6 +55,8 @@ VEGETATION_MULTIPLIER = 1.0       # 0.5 for a lighter scene; 1.5 for denser wood
 BUILD_DRIVEWAY = True            # inferred connection, not a supplied paving plan
 BUILD_ENTRY_WALK = True
 BUILD_OPPOSITE_SIDEWALK = True   # sidewalk visible in aerial, but no houses
+OPPOSITE_LOT_DEPTH = 38.0        # far road edge to back of grassy lots; inferred
+OPPOSITE_LAWN_RELIEF = 0.10      # subtle rear-lawn undulation; frontage stays flat
 BUILD_SMALL_STREET_DETAILS = True
 GROUND_GRID = 2.5
 
@@ -117,6 +123,8 @@ ROAD_Z = BASE_Z - 0.12
 CURB_WIDTH = 0.22
 assert min(LOT_WIDTH, ROAD_WIDTH, ROAD_RADIUS, GROUND_GRID, PRESERVE_DEPTH) > 0
 assert min(TREE_DENSITY, BRUSH_DENSITY, VEGETATION_MULTIPLIER) >= 0
+assert OPPOSITE_LOT_DEPTH > 7.0
+assert OPPOSITE_LAWN_RELIEF >= 0
 
 
 def road_edge(x):
@@ -415,9 +423,42 @@ ribbon('lot-side low rolled curb', road_edge, lambda x: road_edge(x) + CURB_WIDT
        ROAD_Z, GROUND_Z + 0.005, M['concrete'])
 ribbon('opposite low rolled curb', lambda x: road_edge(x) - ROAD_WIDTH - CURB_WIDTH,
        lambda x: road_edge(x) - ROAD_WIDTH, GROUND_Z + 0.005, ROAD_Z, M['concrete'])
-ribbon('opposite grass verge', lambda x: road_edge(x) - ROAD_WIDTH - 7.0,
-       lambda x: road_edge(x) - ROAD_WIDTH - CURB_WIDTH, GROUND_Z, GROUND_Z,
-       M['grass'], 'Ground and open lots')
+# Broad opposite-side grassy home lots follow the road, without houses/fences.
+def opposite_terrain_point(x, distance):
+    y = road_edge(x) - ROAD_WIDTH - distance
+    # Keep frontage and potential home sites flat; shape only the rear lawn.
+    t = max(0.0, min(1.0, (distance - 24.0) / 10.0))
+    t = t * t * (3.0 - 2.0 * t)
+    relief = OPPOSITE_LAWN_RELIEF * t * (
+        0.65 * math.sin((x - CX) * 0.10) * math.sin(distance * 0.19)
+        + 0.35 * math.sin((x - CX) * 0.045 + distance * 0.13))
+    return (x, y, GROUND_Z + relief)
+
+
+opposite = Geo()
+grass_bands = ([(CURB_WIDTH, 1.65), (3.0, OPPOSITE_LOT_DEPTH)]
+               if BUILD_OPPOSITE_SIDEWALK else [(CURB_WIDTH, OPPOSITE_LOT_DEPTH)])
+# Match the road and sidewalk's 200 segments so curved seams align exactly.
+for i in range(200):
+    a = XMIN + (XMAX - XMIN) * i / 200
+    b = XMIN + (XMAX - XMIN) * (i + 1) / 200
+    for near, far in grass_bands:
+        distance = near
+        while distance < far - 1e-7:
+            next_distance = min(distance + GROUND_GRID, far)
+            p = [opposite_terrain_point(a, next_distance),
+                 opposite_terrain_point(b, next_distance),
+                 opposite_terrain_point(b, distance),
+                 opposite_terrain_point(a, distance)]
+            opposite.face([p[0], p[1], p[2]])
+            opposite.face([p[0], p[2], p[3]])
+            distance = next_distance
+opposite_obj = opposite.finish('opposite residential grassy lots and verge - curved frontage',
+                               [M['grass']], 'Ground and open lots')
+opposite_obj['lot_depth_from_far_road_edge_m'] = OPPOSITE_LOT_DEPTH
+opposite_obj['layout_note'] = 'Open grass; flat frontage/home sites and gently shaped rear lawn'
+ROOT['opposite_grassy_lot_depth_m'] = OPPOSITE_LOT_DEPTH
+ROOT['opposite_lots_note'] = 'Expanded grass across street; depth/ground shaping inferred; no houses or fences'
 if BUILD_OPPOSITE_SIDEWALK:
     ribbon('opposite sidewalk only - no houses', lambda x: road_edge(x) - ROAD_WIDTH - 3.0,
            lambda x: road_edge(x) - ROAD_WIDTH - 1.65,
