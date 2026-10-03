@@ -1038,20 +1038,22 @@ def build_interior():
                 face.use_smooth = True
         return ob
 
-    def tap(name,p,z):
+    def tap(name,p,z,direction=(0,-1),reach=.14):
         base = Vector(pt(p,z))
+        forward = Vector((direction[0],direction[1],0)).normalized()
         beam(name+' faucet riser',base,base+Vector((0,0,.22)),.025,metal,'Interior fixtures')
         beam(name+' faucet spout',base+Vector((0,0,.22)),
-             base+Vector((0,-.14,.22)),.025,metal,'Interior fixtures')
+             base+forward*reach+Vector((0,0,.22)),.025,metal,'Interior fixtures')
 
     def worktop(name,bounds,height=.90):
         a,b,c,d = bounds
         # Hollow carcass leaves room for real recessed sink bowls.
-        for label,bounds in [('west side',(a+1,b+1,a+2,d-1)),
-                             ('east side',(c-2,b+1,c-1,d-1)),
-                             ('north face',(a+2,b+1,c-2,b+2)),
-                             ('south face',(a+2,d-2,c-2,d-1))]:
-            rect(name+' '+label,bounds,fz+.09,height-.04,cabinet)
+        # Keep the full worktop bounds intact while building its carcass.
+        for label,panel_bounds in [('west side',(a+1,b+1,a+2,d-1)),
+                                   ('east side',(c-2,b+1,c-1,d-1)),
+                                   ('north face',(a+2,b+1,c-2,b+2)),
+                                   ('south face',(a+2,d-2,c-2,d-1))]:
+            rect(name+' '+label,panel_bounds,fz+.09,height-.04,cabinet)
         rect(name+' cabinet bottom',(a+1,b+1,c-1,d-1),fz+.09,fz+.115,cabinet)
         rect(name+' recessed plinth',(a+3,b+3,c-3,d-3),fz,fz+.09,oak)
         top = rect(name+' countertop',bounds,height-.04,height,stone)
@@ -1064,7 +1066,7 @@ def build_interior():
                         .006,oak,'Interior cabinetry')
         return top
 
-    def sink(name,top,p,z=.90,rx=.23,ry=.18):
+    def sink(name,top,p,z=.90,rx=.23,ry=.18,faucet_side='north'):
         # Oval cut is concealed by the rim; the cabinet below is hollow.
         cutter = oval(name+' basin cutter',p,rx*.91,ry*.91,
                       [(z-.28,1),(z+.08,1)],None)
@@ -1072,7 +1074,15 @@ def build_interior():
         oval(name+' hollow basin',p,rx,ry,
              [(z-.17,.38),(z+.006,1),(z+.019,1),(z+.019,.84),
               (z-.14,.48),(z-.15,.12)])
-        tap(name,(p[0],p[1]-ry/SCALE-3),z)
+        # Locate the faucet behind the bowl and aim its spout inward.
+        if faucet_side == 'west':
+            tap(name,(p[0]-(rx+.04)/SCALE,p[1]),z,(1,0),.18)
+        elif faucet_side == 'south':
+            tap(name,(p[0],p[1]+(ry+.04)/SCALE),z,(0,1),.18)
+        elif faucet_side == 'north':
+            tap(name,(p[0],p[1]-ry/SCALE-3),z)
+        else:
+            raise ValueError('Unsupported faucet side: '+faucet_side)
 
     def toilet(name,p):
         oval(name+' pedestal',p,.16,.21,[(fz,.8),(fz+.08,1),(fz+.33,.80)])
@@ -1477,14 +1487,67 @@ def build_interior():
     tub('Shared bath tub',(167,505,245,542))
     master = worktop('Master double vanity',(1037,801,1073,921),.86)
     for y in (826,895):
-        sink('Master vanity basin',master,(1054,y),.86,.21,.18)
+        sink('Master vanity basin',master,(1054,y),.86,.21,.18,
+             faucet_side='west')
         rect('Master vanity mirror',(1034,y-16,1035,y+16),1.04,2.16,metal,'Interior fixtures')
-    toilet('Master enclosed toilet',(1060,1053))
+    # Tank rear meets the south face of the toilet-room north wall.
+    master_toilet_y = 1005 + thick/(2*SCALE) + 23
+    toilet('Master enclosed toilet',(1060,master_toilet_y))
     tub('Master soaking tub',(1095,1058,1181,1103))
-    shower('Master walk-in shower',(1200,964,1248,1076))
+    def master_walk_in_shower():
+        group = 'Interior fixtures'
+        a,b,c,d = 1200,964,1248,1076
+        entry_end = 1008
+        top = 2.18
+        # A low tray, with no rail or curb crossing the west-side entrance.
+        rect('Master shower tray',(a,b,c,d),fz,fz+.025,ceramic,group)
+        rect('Master shower drain',(1221,1043,1227,1049),
+             fz+.025,fz+.028,metal,group)
+        # Tile linings meet the existing closet and exterior wall faces.
+        # They also meet one another at both east corners.
+        east_wall_face = 1255-WALL_THICKNESS/(2*SCALE)
+        south_wall_face = 1082-WALL_THICKNESS/(2*SCALE)
+        north_wall_face = 956+thick/(2*SCALE)
+        rect('Master shower north tiled wall',
+             (a,north_wall_face-.2,east_wall_face+.2,b),fz,top,tile,group)
+        rect('Master shower east tiled wall',
+             (c,b,east_wall_face+.2,south_wall_face+.2),fz,top,tile,group)
+        rect('Master shower south tiled wall',
+             (a,d-1,east_wall_face+.2,south_wall_face+.2),fz,top,tile,group)
+        # Fixed west screen shields the spray zone; entry is y=964..1008.
+        segment('Master shower screen base',(a,entry_end),(a,d-1),
+                fz,fz+.065,.045,ceramic,group)
+        segment('Master shower fixed glass',(a,entry_end),(a,d-1),
+                fz+.065,top,.012,shower_glass,group)
+        for y in (entry_end,d-1):
+            beam('Master shower screen post',pt((a,y),fz+.025),
+                 pt((a,y),top),.025,metal,group)
+        beam('Master shower glass top rail',pt((a,entry_end),top),
+             pt((a,d-1),top),.025,metal,group)
+        beam('Master shower screen brace',pt((a,entry_end),top),
+             pt((c,entry_end),top),.022,metal,group)
+        # East-wall fittings point west into the rear of the enclosure.
+        mount = (c-2,1045)
+        for z in (1.08,1.92):
+            beam('Master shower riser fixing',pt((c,1045),z),
+                 pt(mount,z),.03,metal,group)
+        beam('Master shower riser',pt(mount,1.02),
+             pt(mount,2.05),.026,metal,group)
+        head = Vector(pt(mount,2.05))+Vector((-.35,0,0))
+        beam('Master shower arm',pt(mount,2.05),head,.026,metal,group)
+        box('Master shower rain head',head+Vector((0,0,-.02)),
+            (.22,.22,.04),metal,group)
+        box('Master shower mixer',pt((c-1,1045),1.05),
+            (.04,.12,.12),metal,group)
+        # Geometry checks run whenever the model is regenerated.
+        assert (entry_end-b)*SCALE-.025/2 > .80
+        assert (c-a)*SCALE > .85
+        assert entry_end < 1045 < d-1
+
+    master_walk_in_shower()
     if INCLUDE_POOL_BATH:
         pooltop = worktop('Pool bath vanity',(365,194,438,220),.86)
-        sink('Pool bath basin',pooltop,(402,207),.86)
+        sink('Pool bath basin',pooltop,(402,207),.86,faucet_side='south')
         toilet('Pool bath toilet',(329,119))
         # Dedicated pool enclosure; do not alter the master shower.
         # North wall is tiled, both ends are glazed, and the south-facing
