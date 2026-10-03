@@ -473,6 +473,65 @@ def garage_door(p,width):
 garage_door((160,933),4.20)
 garage_door((186,1155),2.40)
 
+# Low equipment-screen wall on the west side, just behind the garage doors.
+# Visual estimates only: follows the supplied open-ended, clipped-corner plan.
+# The double garage opening ends near plan y=823; y=800 leaves it clear.
+def garage_equipment_screen():
+    anchor = Vector(xy((160,800)))
+    anchor.x -= WALL_THICKNESS/2-.01
+    height = 1.14
+    thickness = .18
+    # Out from the house, diagonal toward the rear, then parallel to house.
+    # Positive world Y is rearward. The far end intentionally stays open.
+    path = [anchor,
+            anchor+Vector((-2.05,0)),
+            anchor+Vector((-2.75,.70)),
+            anchor+Vector((-2.75,2.05))]
+
+    def strip_polygon(width,end_extension=0):
+        points = [p.copy() for p in path]
+        points[0] -= (path[1]-path[0]).normalized()*end_extension
+        points[-1] += (path[-1]-path[-2]).normalized()*end_extension
+        directions = [(points[i+1]-points[i]).normalized() for i in range(len(points)-1)]
+        normals = [Vector((-d.y,d.x)) for d in directions]
+        offsets = []
+        for i in range(len(points)):
+            if i == 0:
+                offsets.append(normals[0]*width/2)
+            elif i == len(points)-1:
+                offsets.append(normals[-1]*width/2)
+            else:
+                bisector = normals[i-1]+normals[i]
+                offsets.append(bisector*(width/2/bisector.dot(normals[i])))
+        return ([p+n for p,n in zip(points,offsets)]+
+                [p-n for p,n in reversed(list(zip(points,offsets)))])
+
+    def solid_strip(name,width,bottom,top,mat,end_extension=0):
+        polygon = strip_polygon(width,end_extension)
+        count = len(polygon)
+        verts = [(p.x,p.y,z) for z in (bottom,top) for p in polygon]
+        faces = [tuple(reversed(range(count))),tuple(range(count,2*count))]
+        faces += [(i,(i+1)%count,(i+1)%count+count,i+count) for i in range(count)]
+        return mesh(name,verts,faces,mat,'Shell')
+
+    wall = solid_strip('Garage equipment screening wall',thickness,-.04,height,stucco)
+    # Small square through-openings grouped near the house, as in the photo.
+    # Cut the screening wall only, never the house or garage-door geometry.
+    for row,count in enumerate((4,5,4)):
+        for col in range(count):
+            distance = .90+(col-(count-1)/2)*.18
+            cutter = box('Equipment screen vent cutter',
+                         (anchor.x-distance,anchor.y,.38+row*.18),
+                         (.105,thickness+.30,.105),None,'Shell')
+            difference(wall,cutter)
+    cap = solid_strip('Equipment screen pale coping',.23,height,height+.055,trim,.02)
+    bevel = cap.modifiers.new('Soft coping edges','BEVEL')
+    bevel.width = .008
+    bevel.segments = 2
+
+
+garage_equipment_screen()
+
 # Front porch and signature three-bay arched colonnade.
 slab('Front porch paving',(524,902,1032,1080),-.04,.035,pavers,'Shell')
 for x in (541,684,845,1011):
