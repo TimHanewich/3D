@@ -374,11 +374,15 @@ def stepped_waterfall():
 
     # High central tier bends around both ends of the clipped corner.
     # Lower wings continue along the two adjoining pool walls, hugging them.
-    tiers = [('center',-.18,corner_length+.18,.78,.46),
-             ('left wing',-1.10,-.18,.65,.25),
-             ('right wing',corner_length+.18,corner_length+1.10,.65,.25),
-             ('left outer step',-1.65,-1.10,.48,.12),
-             ('right outer step',corner_length+1.10,corner_length+1.65,.48,.12)]
+    # Equal outward depth makes every tier reach the same deck limits.
+    # The corner-fit transform below maps these shared back edges exactly
+    # to the rear and right lanai boundaries, without moving the pool faces.
+    tier_depth = .78
+    tiers = [('center',-.18,corner_length+.18,tier_depth,.46),
+             ('left wing',-1.10,-.18,tier_depth,.25),
+             ('right wing',corner_length+.18,corner_length+1.10,tier_depth,.25),
+             ('left outer step',-1.65,-1.10,tier_depth,.12),
+             ('right outer step',corner_length+1.10,corner_length+1.65,tier_depth,.12)]
     for label,start,end,depth,height in tiers:
         poly = wall_strip(start,end,depth)
         prism('Waterfall '+label+' wall-aligned masonry',poly,DECK_Z,height,grout)
