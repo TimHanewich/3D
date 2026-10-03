@@ -868,9 +868,16 @@ def build_interior():
             cursor = offset+width
         solid(cursor,length)
 
-    # West bedroom wing: narrow hall along the family room and kitchen.
-    partition('Bedroom wing east wall',(367,224),(367,730),
-              [(173,46,'door'),(323,46,'door')])
+    # West bedroom wing: ONE kitchen-side entrance at plan y=500..548.
+    # The short passage serves the shared bath straight ahead and the two
+    # bedrooms on opposite sides; neither bedroom opens into the kitchen.
+    # Reverse the wall direction so this leaf swings into the passage.
+    partition('Bedroom wing east wall',(367,730),(367,224),
+              [(182,48,'door')])
+    partition('Bedroom 3 passage entrance',(320,431),(367,431),
+              [(4,39,'door')])
+    partition('Bedroom 2 passage entrance',(367,548),(320,548),
+              [(4,39,'door')])
     partition('Bedroom 3 closet front',(160,400),(315,400),[(30,96,'closet')])
     partition('Bedroom 3 closet back',(160,431),(320,431))
     partition('Bedroom 3 closet end',(315,400),(315,431))
@@ -933,6 +940,7 @@ def build_interior():
                               (836,848),(836,902),(708,902),(708,848),
                               (641,788),(524,788),(524,813),(463,813)]),
         ('Shared bath',[(160,431),(320,431),(320,548),(160,548)]),
+        ('Shared bath passage',[(320,431),(367,431),(367,548),(320,548)]),
         ('Master bath',[(1032,796),(1162,796),(1198,827),(1198,895),
                          (1162,924),(1162,956),(1255,956),(1255,1082),
                          (1195,1082),(1195,1110),(1085,1110),(1085,1080),
