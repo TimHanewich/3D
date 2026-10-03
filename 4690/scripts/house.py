@@ -238,11 +238,74 @@ def opening(name, p, width, bottom=.65, spring=2.35, rise=.38, door=False):
                      q(width/2*math.cos(angle),spring+rise*math.sin(angle),offset),.025)
 
 
+def double_entry(p, width=1.74, bottom=.055, spring=2.22, rise=.54):
+    # Two solid leaves, not the continuous glazing used for windows/sliders.
+    name = 'Recessed double entry'
+    wall, u2 = nearest_wall(p)
+    profile = arch_shape(width,bottom,spring,rise)
+    difference(wall,facade_prism('Entry cutter',p,u2,profile,.65,0,None))
+    door_finish = material('Entry painted warm cream', (.68, .61, .46), .38)
+    panel_finish = material('Entry raised panels', (.75, .68, .53), .40)
+    hardware = material('Entry aged bronze hardware', (.16, .105, .045), .26)
+    hardware.node_tree.nodes.get('Principled BSDF').inputs['Metallic'].default_value = .75
+    u = Vector((*u2,0)); n = Vector((-u.y,u.x,0)); base = Vector(pt(p))
+    def q(x,z,offset):
+        return base+u*x+n*offset+Vector((0,0,z))
+    def rectangle(x0,x1,z0,z1):
+        return [(x0,z0),(x1,z0),(x1,z1),(x0,z1)]
+
+    # Dark backing makes the narrow perimeter and meeting gaps legible.
+    facade_prism(name+' reveal',p,u2,
+                 rectangle(-width/2,width/2,bottom,spring),.018,0,shadow)
+    for side, label in [(-1,'left'),(1,'right')]:
+        x0, x1 = (-width/2+.055,-.008) if side < 0 else (.008,width/2-.055)
+        z0, z1 = bottom+.012, spring-.045
+        facade_prism(name+' '+label+' solid door',p,u2,
+                     rectangle(x0,x1,z0,z1),.09,0,door_finish)
+        # Raised rectangular panels and hardware on both faces, matching the
+        # existing surround convention without assuming wall winding.
+        for offset in (-.055,.055):
+            face = -1 if offset < 0 else 1
+            for low, high in [(z0+.16,z0+.69),(z0+.84,z1-.16)]:
+                panel = rectangle(x0+.12,x1-.12,low,high)
+                facade_prism(name+' '+label+' raised panel',p,u2,
+                             panel,.018,offset,panel_finish)
+                for i,(x,z) in enumerate(panel):
+                    xx,zz = panel[(i+1)%len(panel)]
+                    beam(name+' panel molding',q(x,z,offset+face*.013),
+                         q(xx,zz,offset+face*.013),.022,trim,'Openings')
+            handle_x = -.12 if side < 0 else .12
+            facade_prism(name+' '+label+' handle backplate',p,u2,
+                         rectangle(handle_x-.026,handle_x+.026,.91,1.21),
+                         .018,face*.065,hardware)
+            for z in (.96,1.16):
+                beam(name+' handle mounting',q(handle_x,z,face*.07),
+                     q(handle_x,z,face*.115),.022,hardware,'Openings')
+            beam(name+' '+label+' pull handle',q(handle_x,.96,face*.115),
+                 q(handle_x,1.16,face*.115),.025,hardware,'Openings')
+
+    # Glazing exists only in the fanlight above the two rectangular leaves.
+    fanlight = [(width/2*math.cos(math.pi*i/28),
+                 spring+rise*math.sin(math.pi*i/28)) for i in range(29)]
+    facade_prism(name+' arched transom glass',p,u2,fanlight,.028,0,glass)
+    for offset in (-.145,.145):
+        for i,(x,z) in enumerate(profile):
+            xx,zz = profile[(i+1)%len(profile)]
+            beam(name+' surround',q(x,z,offset),q(xx,zz,offset),.085)
+        beam(name+' transom rail',q(-width/2,spring,offset),
+             q(width/2,spring,offset),.09)
+        for angle in (math.pi/4,math.pi/2,3*math.pi/4):
+            beam(name+' fanlight spoke',q(0,spring,offset),
+                 q(width/2*math.cos(angle),spring+rise*math.sin(angle),offset),.025)
+    facade_prism(name+' threshold',p,u2,
+                 rectangle(-width/2,width/2,.035,bottom+.012),.30,0,coping)
+
+
 # Front-facing windows: pair in garage wing, dining, study, master bath.
 for p in [(264,1240),(447,1240),(610,990),(923,1020)]:
     opening('Front arched window',p,1.12,.68,2.31,.43)
 opening('Bath privacy window',(1140,1110),1.20,1.40,2.26,.25)
-opening('Recessed double entry',(772,902),1.74,.03,2.22,.54,True)
+double_entry((772,902))
 # Left elevation bedroom and bath openings, plus front side garage window.
 for p,w,z in [((160,250),.80,.85),((160,474),.64,1.40),((160,633),1.20,.76),
               ((201,216),.94,.83)]:
