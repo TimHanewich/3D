@@ -391,25 +391,24 @@ def stepped_waterfall():
         # Caps follow the identical bent outline without bridging the pool.
         prism('Waterfall '+label+' fitted pale cap',poly,height,height+.04,coping)
 
-    # Outlet lies on the diagonal pool-wall plane; lip projects into basin.
+    # Slim near-flush waterfall outlet: no shelf and no raised side cheeks.
+    # A narrow dark slot sits just ahead of the tile face, above a 6mm lip
+    # projecting only about 2cm beyond the tile instead of the old ledge.
     outlet = material('Waterfall outlet shadow',(.025,.055,.06),.45)
-    block('spillway mouth',-.22,.22,-.022,-.010,.375,.435,outlet)
-    block('spillway lip',-.25,.25,-.17,.025,.355,.375,coping)
-    for x0,x1 in [(-.28,-.25),(.25,.28)]:
-        block('spillway cheek',x0,x1,-.17,.025,.355,.415,tiles[1])
+    block('thin outlet slot',-.22,.22,-.013,-.009,.397,.409,outlet)
+    block('thin outlet lip',-.23,.23,-.026,.01,.391,.397,coping)
 
     if MAKE_WATERFALL_FLOW:
         # Optional static ribbon, not a fluid simulation or pool surface.
-        # In a dry basin the ribbon falls to the floor, not an invisible
-        # water plane. Disabled unless explicitly wanted for presentation.
-        end = point(0,-.31)
+        # Starts at the revised thin outlet; pool water remains disabled.
+        end = point(0,-.166)
         end_z = floor_z(end)+.025
         verts,faces = [],[]
         sections = 24
         for i in range(sections+1):
             t = i/sections
-            y = -.17-.14*t
-            z = .383+(end_z-.383)*t*t
+            y = -.026-.14*t
+            z = .400+(end_z-.400)*t*t
             half_width = .22+.025*t
             for side in (-1,1):
                 p = point(side*half_width,y)
