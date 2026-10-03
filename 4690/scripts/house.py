@@ -1198,9 +1198,9 @@ def build_interior():
 
         # Start the west run beyond the existing bedroom doorway.
         block('west backing',(371,603,374,730),fz,2.65,paint)
-        block('rear backing',(374,730,677,733),fz,2.65,paint)
+        block('rear backing',(374,730,617,733),fz,2.65,paint)
         block('west backsplash',(374,604,374.8,729),.945,1.49,splash)
-        block('rear backsplash',(375,729,620,729.8),.945,1.49,splash)
+        block('rear backsplash',(375,729,560,729.8),.945,1.49,splash)
 
         for y in range(609,729,12):
             center = Vector(pt((375,y),1.18))
@@ -1209,7 +1209,7 @@ def build_interior():
             mesh('Kitchen backsplash diamond',
                  [tuple(center+Vector(v)) for v in offsets],
                  [(0,1,2,3)],hardware,cg)
-        for x in range(385,618,12):
+        for x in range(385,558,12):
             center = Vector(pt((x,728.8),1.18))
             offsets = ((-.035,0,0),(0,0,.045),
                        (.035,0,0),(0,0,-.045))
@@ -1231,11 +1231,11 @@ def build_interior():
                    .905,.945,granite))
 
         for a,b in ((409,451),(451,493),(493,535),
-                    (535,577),(577,620)):
+                    (535,560)):
             unit('rear base',((a+b)/2,699),(b-a)*SCALE,'north')
             unit('rear upper',((a+b)/2,712),(b-a)*SCALE,
                  'north',depth=.34,low=1.49,high=2.40)
-        soft(block('rear granite',(409,696,621,732),
+        soft(block('rear granite',(409,696,561,732),
                    .905,.945,granite))
 
         # Stainless range and over-range microwave on photograph's right.
@@ -1261,21 +1261,21 @@ def build_interior():
              depth=.34,low=2.01,high=2.40)
 
         # Back-left refrigerator: paired doors, dispenser and freezer drawer.
-        block('refrigerator carcass',(623,687,675,729),fz,2.12,dark,fg)
-        for a,b in ((624,648),(649,674)):
+        block('refrigerator carcass',(563,687,615,729),fz,2.12,dark,fg)
+        for a,b in ((564,588),(589,614)):
             soft(block('refrigerator door',(a,685,b,687),
                        .70,2.10,metal,fg))
-        soft(block('freezer drawer',(624,685,674,687),
+        soft(block('freezer drawer',(564,685,614,687),
                    fz+.04,.685,metal,fg))
-        block('water dispenser',(628,684.5,640,685),1.12,1.46,dark,fg)
-        for x in (645,652):
+        block('water dispenser',(568,684.5,580,685),1.12,1.46,dark,fg)
+        for x in (585,592):
             beam('Kitchen fridge pull',pt((x,683),1.05),
                  pt((x,683),1.76),.029,metal,fg)
-        beam('Kitchen freezer pull',pt((629,683),.58),
-             pt((669,683),.58),.03,metal,fg)
-        block('fridge left filler',(621,688,623,731),fz,2.42)
-        block('fridge right filler',(675,688,677,731),fz,2.42)
-        unit('fridge bridge',(649,712),52*SCALE,'north',
+        beam('Kitchen freezer pull',pt((569,683),.58),
+             pt((609,683),.58),.03,metal,fg)
+        block('fridge left filler',(561,688,563,731),fz,2.42)
+        block('fridge right filler',(615,688,617,731),fz,2.42)
+        unit('fridge bridge',(589,712),52*SCALE,'north',
              depth=.34,low=2.16,high=2.40)
 
         # Two-level sink bar, with seating toward the living-room divider.
@@ -1344,13 +1344,13 @@ def build_interior():
 
         # Soffits and recessed lenses; leave scene lighting unchanged.
         block('west soffit',(370,601,400,735),2.43,2.68)
-        block('rear soffit',(400,704,678,735),2.43,2.68)
+        block('rear soffit',(400,704,618,735),2.43,2.68)
         lens = material('Kitchen warm downlight lenses',(1.0,.84,.53),.25)
         shader = lens.node_tree.nodes.get('Principled BSDF')
         shader.inputs['Emission Color'].default_value = (1.0,.78,.43,1)
         shader.inputs['Emission Strength'].default_value = 2.0
         lights = [(397,y) for y in (614,650,690,720)]
-        lights += [(x,707) for x in (438,480,524,568,647)]
+        lights += [(x,707) for x in (438,480,524,587)]
         for p in lights:
             oval('Kitchen downlight rim',p,.066,.066,
                  [(2.419,1),(2.432,1)],metal,cg)
