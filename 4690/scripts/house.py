@@ -645,9 +645,7 @@ def front_balustrades():
     # Front runs stop at the existing pier faces; never cross the gate bay.
     run('Left porch balustrade',(541,1068),(684,1068),.145,.145)
     run('Right porch balustrade',(845,1068),(1011,1068),.145,.145)
-    # Short side returns terminate at the exterior wall faces.
-    run('Left porch railing return',(541,1068),(541,990),.17,.11)
-    run('Right porch railing return',(1011,1068),(1011,1020),.17,.11)
+    # Front railings only; both porch sides remain open.
 
 
 front_balustrades()
