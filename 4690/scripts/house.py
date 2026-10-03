@@ -40,6 +40,7 @@ MAKE_INTERIOR_CEILINGS = False  # Leave off for an unobstructed top-down inspect
 INTERIOR_CUTAWAY = False      # Hide roofs/ceilings in viewport only, not renders.
 INTERIOR_WALL_THICKNESS = .115
 INTERIOR_DOOR_HEIGHT = 2.13
+MAKE_INTERIOR_DOOR_LEAVES = False  # Keep room/closet frames, omit panels and handles.
 INTERIOR_FLOOR_Z = .045       # Above the existing broad porch paving slab.
 PREFIX = 'H4690'
 random.seed(4690)
@@ -847,7 +848,7 @@ def build_interior():
                     beam(name+' jamb',v+Vector((0,0,.01)),v+Vector((0,0,height)),
                          .028,trim,'Interior doors',thick)
                 clear = width*SCALE-.055
-                if kind == 'door':
+                if kind == 'door' and MAKE_INTERIOR_DOOR_LEAVES:
                     theta = math.radians(72)
                     leaf_u = u*math.cos(theta)+n*math.sin(theta)
                     hinge = left+u*.03
@@ -859,7 +860,7 @@ def build_interior():
                         handle = hinge+leaf_u*(clear-.10)+Vector((0,0,1.0))
                         beam(name+' lever',handle+normal*.045,
                              handle+normal*.045-leaf_u*.10,.018,metal,'Interior doors')
-                elif kind == 'closet':
+                elif kind == 'closet' and MAKE_INTERIOR_DOOR_LEAVES:
                     # Bifolds parked at each jamb rather than blocking access.
                     for side,v in [(1,left),(-1,right)]:
                         for k in range(2):
