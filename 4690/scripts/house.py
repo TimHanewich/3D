@@ -304,7 +304,7 @@ def double_entry(p, width=1.74, bottom=.055, spring=2.22, rise=.54):
 # Front-facing windows: pair in garage wing, dining, study, master bath.
 for p in [(264,1240),(447,1240),(610,990),(923,1020)]:
     opening('Front arched window',p,1.12,.68,2.31,.43)
-opening('Bath privacy window',(1140,1110),1.20,1.40,2.26,.25)
+opening('Far right front arched window',(1140,1110),1.12,.68,2.31,.43)
 double_entry((772,902))
 # Left elevation bedroom and bath openings, plus front side garage window.
 for p,w,z in [((160,250),.80,.85),((160,474),.64,1.40),((160,633),1.20,.76),
@@ -464,14 +464,15 @@ for x,y in [(186,1240),(524,1240),(160,216),(1257,414)]:
         box('Corner stucco quoin',pt((x,y),z),(.38,.37,.22),trim,'Trim')
 
 # -------------------------- roofs --------------------------
-# Hip components are deliberately separate and editable. The overlaid tiles are
-# suppressed wherever another hip is higher, reducing visible intersection clutter.
+# Roof components remain separately editable. Tiles are suppressed wherever
+# another roof is higher, including the front-facing gable over the bath window.
+FRONT_GABLE_NAME = 'Right front window gable'
 roof_specs = [
     ('Garage hip',(160,735,524,1240),3.25),
     ('West bedroom family hip',(160,212,608,816),3.25),
     ('Main entry living hip',(520,515,1100,1080),3.48),
     ('Master suite hip',(969,414,1258,1083),3.25),
-    ('Bath projection hip',(1082,950,1258,1110),3.23),
+    (FRONT_GABLE_NAME,(1085,950,1195,1110),3.25),
 ]
 if INCLUDE_POOL_BATH:
     roof_specs.append(('Pool bath hip',(300,84,446,238),3.20))
@@ -483,17 +484,25 @@ for name,(a,b,c,d),eave in roof_specs:
 
 
 def roof_z(r,x,y):
-    _,a,b,c,d,z = r
+    name,a,b,c,d,z = r
     if not (a-1e-5 <= x <= b+1e-5 and c-1e-5 <= y <= d+1e-5):
         return -100
+    if name == FRONT_GABLE_NAME:
+        # Ridge runs front-to-back; no hip slope across the front triangle.
+        return z+ROOF_PITCH*min(x-a,b-x)
     return z+ROOF_PITCH*min(x-a,b-x,y-c,d-y)
 
 
+gable_roof = next(r for r in roofs if r[0] == FRONT_GABLE_NAME)
 for r in roofs:
     name,a,b,c,d,z = r
     h = min(b-a,d-c)/2
     corners = [(a,c,z),(b,c,z),(b,d,z),(a,d,z)]
-    if b-a <= d-c:
+    if name == FRONT_GABLE_NAME:
+        peak = z+(b-a)/2*ROOF_PITCH
+        ridge = [((a+b)/2,c,peak),((a+b)/2,d,peak)]
+        faces = [(0,4,5,3),(4,1,2,5)]
+    elif b-a <= d-c:
         ridge = [((a+b)/2,c+h,z+h*ROOF_PITCH),((a+b)/2,d-h,z+h*ROOF_PITCH)]
         faces = [(0,1,4),(1,2,5,4),(2,3,5),(3,0,4,5)]
     else:
@@ -501,11 +510,50 @@ for r in roofs:
         faces = [(0,1,5,4),(1,2,5),(2,3,4,5),(3,0,4)]
     ob = mesh(name,corners+ridge,faces,roofmat,'Roofs')
     solid = ob.modifiers.new('Roof thickness','SOLIDIFY'); solid.thickness=.065
-    for i in range(4):
-        q0,q1 = corners[i],corners[(i+1)%4]
-        beam('Eave fascia',q0,q1,.14,trim,'Roofs',.17)
-        beam('Rain gutter',Vector(q0)+Vector((0,0,.035)),Vector(q1)+Vector((0,0,.035)),.07,trim,'Roofs')
-    beam('Hip ridge cap',ridge[0],ridge[1],.16,roofmat,'Roofs')
+    if name == FRONT_GABLE_NAME:
+        # Stucco face is centered on the existing window and meets the wall.
+        wall_half = (1195-1085)*SCALE/2
+        shoulder = peak-wall_half*ROOF_PITCH-.07
+        facade_prism('Right front gable stucco face',(1140,1110),(1,0),
+                     [(-wall_half,WALL_HEIGHT-.03),(wall_half,WALL_HEIGHT-.03),
+                      (wall_half,shoulder),(0,peak-.07),(-wall_half,shoulder)],
+                     WALL_THICKNESS,0,stucco,'Shell')
+        # Broad cream rake boards outline the peak; no horizontal gutter
+        # across the triangle. Matching soffits close the front overhang.
+        wall_y = xy((1140,1110))[1]
+        for edge in (corners[0],corners[1]):
+            beam('Front gable sloping fascia',edge,ridge[0],.17,trim,'Roofs',.19)
+            beam('Front gable lower molding',Vector(edge)+Vector((0,-.04,-.10)),
+                 Vector(ridge[0])+Vector((0,-.04,-.10)),.045,trim,'Trim')
+            mesh('Front gable soffit',
+                 [(edge[0],c,edge[2]-.07),((a+b)/2,c,peak-.07),
+                  ((a+b)/2,wall_y,peak-.07),(edge[0],wall_y,edge[2]-.07)],
+                 [(0,1,2,3)],trim,'Roofs')
+        eave_edges = [(corners[0],corners[3]),(corners[1],corners[2])]
+    else:
+        eave_edges = [(corners[i],corners[(i+1)%4]) for i in range(4)]
+    for q0,q1 in eave_edges:
+        # Remove only the stretches of existing fascia/gutter buried by
+        # the new gable so a straight bar cannot cross its front face.
+        start,end = Vector(q0),Vector(q1)
+        steps = max(1,math.ceil((end-start).length/.04))
+        run = None
+        for i in range(steps+1):
+            visible = False
+            if i < steps:
+                mid = start+(end-start)*((i+.5)/steps)
+                visible = (name == FRONT_GABLE_NAME or
+                           roof_z(gable_roof,mid.x,mid.y) <= mid.z+.025)
+            if visible and run is None:
+                run = i
+            elif not visible and run is not None:
+                v0 = start+(end-start)*(run/steps)
+                v1 = start+(end-start)*(i/steps)
+                beam('Eave fascia',v0,v1,.14,trim,'Roofs',.17)
+                beam('Rain gutter',v0+Vector((0,0,.035)),
+                     v1+Vector((0,0,.035)),.07,trim,'Roofs')
+                run = None
+    beam('Roof ridge cap',ridge[0],ridge[1],.16,roofmat,'Roofs')
 
 if MAKE_ROOF_TILES:
     verts,faces,mi = [],[],[]
