@@ -1,7 +1,8 @@
 """Rough exterior neighbors from across_the_street.jpeg.
 
-Run honor.py, honor_pool.py and honor_environment.py first, then this script
-in Blender's Text Editor. No add-ons, textures, cameras, lights or interiors.
+Run this script directly in Blender's Text Editor, including in a fresh scene.
+No need to run honor.py, honor_pool.py or honor_environment.py first.
+No add-ons, textures, cameras, lights or interiors.
 Rerunning replaces ONLY this script's owned HONOR_NEIGHBORS collection.
 House, pool and environment objects/materials are read, never modified.
 
@@ -22,11 +23,15 @@ Roof course strips suggest tile roofing without individual tile geometry.
 Windows are opaque exterior panels over solid masses, not interior openings.
 
 ALIGNMENT
-Uses the existing environment road mesh in the Honor foundation frame.
-Actual road vertices are interpolated; a fitted parabola continues the curve
-only where the photographed row exceeds the current environment's extent.
-That extra street/verge/sidewalk/grass belongs to HONOR_NEIGHBORS and never
-covers the existing road/grass. Turn EXTEND_SETTING off to omit extensions.
+Automatically uses an existing environment road and/or Honor foundation.
+When absent, matching default coordinates and road dimensions are used.
+Actual road vertices, when present, are interpolated; a fitted parabola
+continues the curve beyond the current environment's extent. Extra setting
+belongs to HONOR_NEIGHBORS. EXTEND_SETTING controls extensions when a road
+already exists; BUILD_STANDALONE_SETTING controls the full fallback setting.
+For houses only in a fresh scene, set BUILD_STANDALONE_SETTING = False.
+If you later add the environment, rerun neighbors.py to remove overlapping
+fallback setting and align to the environment. No other script is executed.
 Photo-left maps to +X when looking outward from Honor toward -Y.
 ROW_SHIFT_LOTS adjusts the uncertain truck-to-opposite-house registration.
 Rerun after moving/rebuilding the house or environment; re-export afterward.
@@ -50,6 +55,14 @@ BUILD_ROOF_COURSES = True
 BUILD_LANAI_FRAMES = True        # a few visible rear enclosure silhouettes
 LOT_DEPTH = 38.0                 # matches the expanded opposite grassy lots
 LAWN_RELIEF = 0.10
+BUILD_STANDALONE_SETTING = True  # add street/grass when no environment is present
+# Standalone layout matches honor.py / honor_environment.py defaults.
+DEFAULT_HOUSE_WIDTH = 10.06
+DEFAULT_ROAD_WIDTH = 7.2
+DEFAULT_ROAD_RADIUS = 185.0
+DEFAULT_HONOR_FRONT_SETBACK = 7.0
+DEFAULT_LOT_WIDTH = 16.0
+DEFAULT_ENV_HALF_WIDTH = 81.0
 
 # Explicit photo-order list, NOT random houses or a generated distant estate.
 # slot, label, width, depth, stories, body tone, roof tone, garage side, lanai
@@ -84,41 +97,79 @@ def frame_points(obj, inverse):
     return [inverse @ (obj.matrix_world @ v.co) for v in obj.data.vertices]
 
 
-# Read and validate dependencies BEFORE removing the previous neighbors.
+# Optional scene alignment: no other script needs to have been run.
+# Resolve and validate everything BEFORE removing the previous neighbors.
 bpy.context.view_layer.update()
 house = bpy.data.collections.get('HONOR_FH1')
 environment = bpy.data.collections.get('HONOR_ENVIRONMENT')
 foundation = find_mesh(house, 'Main foundation')
 road_obj = find_mesh(environment, 'Environment | gently curved unmarked residential road')
-if foundation is None or road_obj is None:
-    raise RuntimeError('Run honor.py and honor_environment.py before neighbors.py.')
-anchor = foundation.matrix_world.copy()
+HAS_ROAD = road_obj is not None
+HAS_ENVIRONMENT_MESHES = (environment is not None and
+                          any(o.type == 'MESH' for o in environment.all_objects))
+if foundation is not None:
+    anchor = foundation.matrix_world.copy()
+elif HAS_ROAD:
+    # The environment road stores its vertices in the original house frame.
+    anchor = road_obj.matrix_world.copy()
+else:
+    anchor = Matrix.Identity(4)
 if abs(anchor.determinant()) < 1e-9:
-    raise RuntimeError('Honor foundation has a singular transform.')
+    raise RuntimeError('Reference transform is singular; restore nonzero scale.')
 inverse = anchor.inverted()
-fp = frame_points(foundation, inverse)
-CX = (min(p.x for p in fp) + max(p.x for p in fp)) / 2
-BASE_Z = min(p.z for p in fp)
-GROUND_Z = BASE_Z - 0.035
-LOT_WIDTH = float(environment.get('estimated_frontage_m', 16.0))
-LOT_DEPTH = float(environment.get('opposite_grassy_lot_depth_m', LOT_DEPTH))
+CX, BASE_Z, honor_front = DEFAULT_HOUSE_WIDTH / 2, 0.0, 0.0
+if foundation is not None:
+    fp = frame_points(foundation, inverse)
+    CX = (min(p.x for p in fp) + max(p.x for p in fp)) / 2
+    BASE_Z = min(p.z for p in fp)
+    garage_foundation = find_mesh(house, 'Projecting garage foundation')
+    if garage_foundation is not None:
+        honor_front = min(p.y for p in frame_points(garage_foundation, inverse))
+LOT_WIDTH = (float(environment.get('estimated_frontage_m', DEFAULT_LOT_WIDTH))
+             if environment is not None else DEFAULT_LOT_WIDTH)
+if environment is not None:
+    LOT_DEPTH = float(environment.get('opposite_grassy_lot_depth_m', LOT_DEPTH))
 assert LOT_WIDTH > 13.5 and LOT_DEPTH > FRONT_SETBACK + 22.0
+assert DEFAULT_ROAD_RADIUS > 0 and DEFAULT_ROAD_WIDTH > 1.0
 
-# Read both edges at each road column. Rounded keys merge duplicate vertices.
-columns = {}
-road_points = frame_points(road_obj, inverse)
-for p in road_points:
-    columns.setdefault(round(p.x, 6), []).append(p.y)
-XS = sorted(columns)
-if len(XS) < 3:
-    raise RuntimeError('Environment road has too few columns for alignment.')
-NEAR = [max(columns[x]) for x in XS]
-FAR = [min(columns[x]) for x in XS]
-ROAD_Z = sum(p.z for p in road_points) / len(road_points)
-ROAD_WIDTH = sum(n - f for n, f in zip(NEAR, FAR)) / len(XS)
+if HAS_ROAD:
+    # Read both edges at each road column; merge duplicate mesh vertices.
+    columns = {}
+    road_points = frame_points(road_obj, inverse)
+    for p in road_points:
+        columns.setdefault(round(p.x, 6), []).append(p.y)
+    XS = sorted(columns)
+    if len(XS) < 3:
+        raise RuntimeError('Existing environment road has too few columns for alignment.')
+    NEAR = [max(columns[x]) for x in XS]
+    FAR = [min(columns[x]) for x in XS]
+    ROAD_Z = sum(p.z for p in road_points) / len(road_points)
+    ROAD_WIDTH = sum(n - f for n, f in zip(NEAR, FAR)) / len(XS)
+    if foundation is None:
+        CX = (XS[0] + XS[-1]) / 2
+        BASE_Z = ROAD_Z + 0.12
+    SIDEWALK = find_mesh(environment, 'Environment | opposite sidewalk only - no houses') is not None
+    ALIGNMENT_MODE = 'Existing environment road; optional Honor foundation'
+else:
+    # Virtual road samples reproduce the companion script's default curve.
+    # These are coordinates only; no companion scripts are imported/executed.
+    XS = [CX - DEFAULT_ENV_HALF_WIDTH + 2 * DEFAULT_ENV_HALF_WIDTH * i / 200
+          for i in range(201)]
+    NEAR = [honor_front - DEFAULT_HONOR_FRONT_SETBACK
+            - (x - CX) ** 2 / (2 * DEFAULT_ROAD_RADIUS) for x in XS]
+    ROAD_WIDTH = DEFAULT_ROAD_WIDTH
+    FAR = [y - ROAD_WIDTH for y in NEAR]
+    ROAD_Z = BASE_Z - 0.12
+    SIDEWALK = True
+    ALIGNMENT_MODE = ('Honor foundation with default road layout' if foundation is not None
+                      else 'Standalone default Honor/environment coordinates')
+    if HAS_ENVIRONMENT_MESHES:
+        print('[Neighbors] Existing environment has no recognized road; using layout defaults.')
+        print('[Neighbors] Supporting setting is skipped to avoid covering renamed environment geometry.')
+GROUND_Z = BASE_Z - 0.035
 XMIN, XMAX = XS[0], XS[-1]
 assert ROAD_WIDTH > 1.0
-SIDEWALK = find_mesh(environment, 'Environment | opposite sidewalk only - no houses') is not None
+print('[Neighbors] Alignment: ' + ALIGNMENT_MODE)
 
 # Fit y = A*x*x + B*x + C to three road columns, using centered coordinates.
 k = len(XS) // 2
@@ -517,14 +568,21 @@ def extend_setting(left, right):
     g.finish('photo-row supporting street and grass extension %.1f to %.1f' % (left, right))
 
 
-if EXTEND_SETTING:
+# Standalone runs can create their own supporting street and grassy lots.
+# Rerunning after the environment is added removes this owned fallback and
+# retains only extensions outside the existing environment's road span.
+if ((HAS_ROAD and EXTEND_SETTING) or
+        (not HAS_ROAD and not HAS_ENVIRONMENT_MESHES and BUILD_STANDALONE_SETTING)):
     extents = []
     for spec, transform in placements:
         w, d = spec[2], spec[3]
         extents.extend((transform @ Vector((x, y, 0))).x
                        for x in (-0.5, w + 0.5) for y in (-1.0, d + 3.5))
-    extend_setting(min(XMIN, min(extents) - 5), XMIN)
-    extend_setting(XMAX, max(XMAX, max(extents) + 5))
+    if HAS_ROAD:
+        extend_setting(min(XMIN, min(extents) - 5), XMIN)
+        extend_setting(XMAX, max(XMAX, max(extents) + 5))
+    else:
+        extend_setting(min(XMIN, min(extents) - 5), max(XMAX, max(extents) + 5))
 for spec, transform in placements:
     build_house(spec, transform)
 # Remove unused owned swatches, but never touch shared environment materials.
