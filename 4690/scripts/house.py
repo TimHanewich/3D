@@ -587,6 +587,70 @@ def front_gate():
 
 
 front_gate()
+
+
+# Photo-inspired cast-concrete balustrades on either side of the entry.
+# Low solid rails with shaped balusters, not metal pickets or solid walls.
+def front_balustrades():
+    stone = material('Porch cream cast concrete', (.89, .86, .75), .60, .004)
+    floor = .035
+    def run(name,a,b,start_inset,end_inset):
+        av,bv = Vector(pt(a)),Vector(pt(b))
+        direction = (bv-av).normalized()
+        av += direction*start_inset
+        bv -= direction*end_inset
+        length = (bv-av).length
+        angle = math.atan2(direction.y,direction.x)
+        middle = (av+bv)/2
+        def rail(label,z0,z1,depth):
+            box(name+' '+label,(middle.x,middle.y,(z0+z1)/2),
+                (length,depth,z1-z0),stone,'Trim',angle)
+        rail('bottom plinth',floor,.15,.22)
+        rail('plinth molding',.15,.19,.24)
+        rail('handrail underside',.84,.88,.20)
+        rail('broad concrete handrail',.88,.97,.27)
+        rail('handrail top molding',.97,.995,.29)
+
+        count = max(1,math.floor(length/.25))
+        # Turned profile: narrow neck, rounded lower body, molded collars.
+        profile = [(0,.052),(.06,.052),(.10,.063),(.16,.063),
+                   (.22,.053),(.34,.075),(.45,.071),(.56,.052),
+                   (.69,.037),(.82,.038),(.89,.052),(.94,.058),(1,.058)]
+        segments = 24
+        for i in range(count):
+            center = av+direction*(length*(i+.5)/count)
+            box(name+' baluster square foot',(center.x,center.y,.225),
+                (.14,.14,.07),stone,'Trim',angle)
+            box(name+' baluster square capital',(center.x,center.y,.81),
+                (.14,.14,.06),stone,'Trim',angle)
+            verts,faces = [],[]
+            for t,radius in profile:
+                z = .26+t*(.78-.26)
+                for j in range(segments):
+                    theta = 2*math.pi*j/segments
+                    verts.append((center.x+radius*math.cos(theta),
+                                  center.y+radius*math.sin(theta),z))
+            for row in range(len(profile)-1):
+                for j in range(segments):
+                    a0 = row*segments+j
+                    b0 = row*segments+(j+1)%segments
+                    faces.append((a0,b0,b0+segments,a0+segments))
+            faces += [tuple(reversed(range(segments))),
+                      tuple(range((len(profile)-1)*segments,len(profile)*segments))]
+            ob = mesh(name+' shaped concrete baluster',verts,faces,stone,'Trim')
+            for polygon in ob.data.polygons:
+                if len(polygon.vertices) == 4:
+                    polygon.use_smooth = True
+
+    # Front runs stop at the existing pier faces; never cross the gate bay.
+    run('Left porch balustrade',(541,1068),(684,1068),.145,.145)
+    run('Right porch balustrade',(845,1068),(1011,1068),.145,.145)
+    # Short side returns terminate at the exterior wall faces.
+    run('Left porch railing return',(541,1068),(541,990),.17,.11)
+    run('Right porch railing return',(1011,1068),(1011,1020),.17,.11)
+
+
+front_balustrades()
 # Quoin-like corner blocks seen on the garage wing.
 for x,y in [(186,1240),(524,1240),(160,216),(1257,414)]:
     for z in (.36,.85,1.34,1.83,2.32,2.81):
