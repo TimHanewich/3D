@@ -9,13 +9,16 @@ All generated surface materials use lit Principled shaders.
 Rerunning replaces ONLY owned HONOR_ENVIRONMENT data. Existing house/pool objects
 and materials are read, never changed. Intended for Blender 3.6+.
 
-REFERENCE: user-supplied drone.jpeg; the dark truck identifies the home lot.
-Curved residential street, broad patchy cleared grass, an irregular brush edge,
-low palm-like scrub, broadleaf crowns and scattered taller pine-like silhouettes.
-Species, distances, street radius and lot boundaries are visual approximations,
-NOT surveyed measurements. No retention pond, distant roads, utility corridor,
-vehicles or neighboring houses. Open neighboring lots are continuous grass:
-there are intentionally no invented property fences or painted boundary lines.
+REFERENCE: user-supplied backyard.jpeg; the black truck identifies the home lot.
+Curved residential street, open rear lawn, an irregular palmetto/brush edge,
+a deep mixed preserve, a narrow utility clearing and a long retention pond.
+The pond is offset left when looking out the back (+Y), with clipped corners,
+muted green water, pale lower lining, dark upper lining and a grassy berm.
+Species, distances, pond dimensions and lot boundaries are visual estimates,
+NOT surveyed measurements. No distant roads, vehicles or neighboring houses.
+Open neighboring lots remain continuous grass, without invented fences or
+painted boundary lines. Rear-only ground extensions contain the full pond;
+residential street width, frontage and opposite lots are unchanged.
 User opposite-lot revision: grass extends 38 meters from the far road edge,
 following the street curve, with flat potential home sites and subtle rear-lawn
 relief. The existing opposite sidewalk is retained with a grass cutout below it.
@@ -48,7 +51,23 @@ FRONT_SETBACK = 7.0              # garage face to lot-side road edge
 ROAD_WIDTH = 7.2
 ROAD_RADIUS = 185.0              # larger = straighter; bends away at each end
 REAR_LAWN_AFTER_POOL = 9.0        # open lawn before irregular preserve edge
-PRESERVE_DEPTH = 78.0
+PRESERVE_DEPTH = 175.0          # minimum rear extent, including pond and far trees
+BUILD_RETENTION_POND = True
+POND_LENGTH = 210.0             # water dimensions; estimated from oblique photo
+POND_WIDTH = 65.0
+POND_CENTER_LEFT = 28.0         # left of house center when looking toward +Y
+POND_CENTER_AFTER_CLEARING = 112.0
+POND_ANGLE_DEGREES = 10.0        # long axis rises away from house toward the right
+POND_CORNER_CUT = 8.0           # clipped corners, not an ornamental oval
+POND_WATER_BELOW_GRADE = 1.65
+POND_BERM_HEIGHT = 0.80
+POND_BANK_WIDTH = 6.0           # horizontal waterline-to-crest distance
+POND_OUTER_SLOPE = 6.0          # crest-to-natural-ground distance
+POND_FAR_TREE_BUFFER = 26.0
+BUILD_PRESERVE_CORRIDOR = True
+BUILD_PRESERVE_UTILITY_POLES = True  # simple photo-inspired silhouettes, no lights
+CORRIDOR_AFTER_CLEARING = 48.0
+CORRIDOR_WIDTH = 9.0
 TREE_DENSITY = 0.033             # approximate trees per square meter
 BRUSH_DENSITY = 0.060
 VEGETATION_MULTIPLIER = 1.0       # 0.5 for a lighter scene; 1.5 for denser woods
@@ -125,6 +144,62 @@ assert min(LOT_WIDTH, ROAD_WIDTH, ROAD_RADIUS, GROUND_GRID, PRESERVE_DEPTH) > 0
 assert min(TREE_DENSITY, BRUSH_DENSITY, VEGETATION_MULTIPLIER) >= 0
 assert OPPOSITE_LOT_DEPTH > 7.0
 assert OPPOSITE_LAWN_RELIEF >= 0
+assert min(POND_LENGTH, POND_WIDTH, POND_WATER_BELOW_GRADE,
+           POND_BANK_WIDTH, POND_OUTER_SLOPE, POND_FAR_TREE_BUFFER) > 0
+assert 0 < POND_CORNER_CUT < min(POND_LENGTH, POND_WIDTH) / 2
+assert POND_BERM_HEIGHT >= 0 and CORRIDOR_WIDTH > 0
+assert POND_CENTER_AFTER_CLEARING > 0 and CORRIDOR_AFTER_CLEARING > 0
+
+POND_ANGLE = math.radians(POND_ANGLE_DEGREES)
+POND_COS, POND_SIN = math.cos(POND_ANGLE), math.sin(POND_ANGLE)
+POND_CX = CX - POND_CENTER_LEFT
+POND_CY = CLEAR_REAR + POND_CENTER_AFTER_CLEARING
+POND_OUTER_OFFSET = POND_BANK_WIDTH + POND_OUTER_SLOPE
+
+
+def pond_outline(offset=0.0):
+    # Counterclockwise convex rings with matching vertices for clean bank strips.
+    a, b = POND_LENGTH / 2 + offset, POND_WIDTH / 2 + offset
+    c = POND_CORNER_CUT + offset * (2.0 - math.sqrt(2.0))
+    local = [(-a + c, -b), (a - c, -b), (a, -b + c), (a, b - c),
+             (a - c, b), (-a + c, b), (-a, b - c), (-a, -b + c)]
+    return [(POND_CX + u * POND_COS - v * POND_SIN,
+             POND_CY + u * POND_SIN + v * POND_COS) for u, v in local]
+
+
+POND_OUTLINE = pond_outline(POND_OUTER_OFFSET)
+PRESERVE_XMIN, PRESERVE_XMAX = XMIN, XMAX
+REAR_EXTENSION_Y = CLEAR_REAR - 8.0
+if BUILD_RETENTION_POND:
+    PRESERVE_XMIN = min(XMIN, min(p[0] for p in POND_OUTLINE) - POND_FAR_TREE_BUFFER)
+    PRESERVE_XMAX = max(XMAX, max(p[0] for p in POND_OUTLINE) + POND_FAR_TREE_BUFFER)
+    YMAX = max(YMAX, max(p[1] for p in POND_OUTLINE) + POND_FAR_TREE_BUFFER)
+    if min(p[1] for p in POND_OUTLINE) < CLEAR_REAR + 16.0:
+        raise ValueError('Move the pond farther back to retain woods behind the lawn.')
+
+
+def inside_pond(x, y, margin=0.0):
+    if not BUILD_RETENTION_POND:
+        return False
+    u = (x - POND_CX) * POND_COS + (y - POND_CY) * POND_SIN
+    v = -(x - POND_CX) * POND_SIN + (y - POND_CY) * POND_COS
+    a = POND_LENGTH / 2 + POND_OUTER_OFFSET
+    b = POND_WIDTH / 2 + POND_OUTER_OFFSET
+    c = POND_CORNER_CUT + POND_OUTER_OFFSET * (2.0 - math.sqrt(2.0))
+    # Offset all supporting edges, including the diagonal corner cuts.
+    return (abs(u) <= a + margin and abs(v) <= b + margin and
+            abs(u) + abs(v) <= a + b - c + margin * math.sqrt(2.0))
+
+
+def corridor_distance(x, y):
+    # Same direction as the pond, crossing the wooded buffer, not the home lot.
+    return (-(x - CX) * POND_SIN +
+            (y - CLEAR_REAR - CORRIDOR_AFTER_CLEARING) * POND_COS)
+
+
+def in_corridor(x, y, margin=0.0):
+    return (BUILD_PRESERVE_CORRIDOR and
+            abs(corridor_distance(x, y)) < CORRIDOR_WIDTH / 2 + margin)
 
 
 def road_edge(x):
@@ -170,7 +245,15 @@ for mat in list(bpy.data.materials):
 
 ROOT = bpy.data.collections.new(COLLECTION_NAME)
 ROOT[OWNER] = True
-ROOT['reference'] = 'User drone.jpeg; lot identified by dark truck'
+ROOT['reference'] = 'User backyard.jpeg; home lot identified by black truck'
+ROOT['pond_layout_note'] = 'Photo-inspired estimates; left-offset elongated lined retention basin'
+ROOT['pond_water_length_m'] = POND_LENGTH
+ROOT['pond_water_width_m'] = POND_WIDTH
+ROOT['pond_center_after_clearing_m'] = POND_CENTER_AFTER_CLEARING
+ROOT['pond_angle_degrees'] = POND_ANGLE_DEGREES
+ROOT['preserve_depth_m'] = YMAX - CLEAR_REAR
+ROOT['pond_enabled'] = BUILD_RETENTION_POND
+ROOT['utility_clearing_enabled'] = BUILD_PRESERVE_CORRIDOR
 ROOT['accuracy'] = 'Aerial-inspired visual setting, NOT a survey or landscape design'
 ROOT['coordinates'] = 'Meters in house frame; front -Y, preserve +Y'
 ROOT['estimated_frontage_m'] = LOT_WIDTH
@@ -178,7 +261,8 @@ ROOT['estimated_rear_clearing_y'] = CLEAR_REAR
 ROOT['seed'] = SEED
 bpy.context.scene.collection.children.link(ROOT)
 GROUPS = {}
-for name in ('Ground and open lots', 'Street and access', 'Preserve trees', 'Preserve brush'):
+for name in ('Ground and open lots', 'Street and access', 'Preserve trees',
+             'Preserve brush', 'Retention pond', 'Preserve corridor'):
     col = bpy.data.collections.new('Environment | ' + name)
     col[OWNER] = True
     ROOT.children.link(col)
@@ -267,6 +351,33 @@ LEAVES = [material('foliage tone %02d' % i, a, b, 1.4, 0.015)
               ((0.23, 0.31, 0.22), (0.38, 0.43, 0.30)),
               ((0.29, 0.31, 0.19), (0.40, 0.40, 0.25))))]
 PLANT_MATS = [M['bark'], M['dry']] + LEAVES
+M.update({
+    'pond_water': material('muted olive green retention water', (0.34, 0.46, 0.39)),
+    'pond_dark': material('charcoal upper pond lining', (0.115, 0.135, 0.18)),
+    'pond_pale': material('pale exposed lower pond lining', (0.84, 0.85, 0.80)),
+    'berm': material('mown olive pond berm', (0.39, 0.43, 0.27), bump=0.008),
+    'track': material('sandy utility maintenance track', (0.56, 0.53, 0.42), bump=0.008),
+    'pole': material('weathered pale utility poles', (0.58, 0.59, 0.55)),
+    'wire': material('muted utility cables', (0.22, 0.24, 0.22)),
+})
+# Opaque water reads well even in Solid mode and cannot reveal a false flat floor.
+# Low roughness provides reflections when preview/render lighting supports them.
+water_bsdf = M['pond_water'].node_tree.nodes.get('Principled BSDF')
+water_bsdf.inputs['Roughness'].default_value = 0.21
+water_bsdf.inputs['IOR'].default_value = 1.333
+water_nodes = M['pond_water'].node_tree.nodes
+water_links = M['pond_water'].node_tree.links
+water_coords = water_nodes.new('ShaderNodeTexCoord')
+water_noise = water_nodes.new('ShaderNodeTexNoise')
+water_noise.inputs['Scale'].default_value = 1.8
+water_noise.inputs['Detail'].default_value = 2.0
+water_bump = water_nodes.new('ShaderNodeBump')
+water_bump.inputs['Strength'].default_value = 0.14
+water_bump.inputs['Distance'].default_value = 0.018
+water_links.new(water_coords.outputs['Object'], water_noise.inputs['Vector'])
+water_links.new(water_noise.outputs['Fac'], water_bump.inputs['Height'])
+water_links.new(water_bump.outputs['Normal'], water_bsdf.inputs['Normal'])
+M['pond_dark'].node_tree.nodes.get('Principled BSDF').inputs['Roughness'].default_value = 0.66
 
 
 # -------------------------- direct mesh construction -------------------------
@@ -377,31 +488,138 @@ def subtract_rect(rect, hole):
             if r[2] - r[0] > 1e-7 and r[3] - r[1] > 1e-7]
 
 
-# --------------------- ground with an actual pool cutout ---------------------
-progress('2/5: building patchy lots, curved street and pool-safe ground.')
-# The terrain grid begins behind the entire road. A separate ribbon joins it
-# to the curving lot-side curb without a terrain sheet running under the road.
+def subtract_pond(polygon):
+    # Partition a convex terrain cell against the pond's CCW outer boundary.
+    # Emit only outside pieces: no terrain sheet remains over the recessed water.
+    if not BUILD_RETENTION_POND:
+        return [polygon]
+    if (max(p[0] for p in polygon) < min(p[0] for p in POND_OUTLINE) or
+            min(p[0] for p in polygon) > max(p[0] for p in POND_OUTLINE) or
+            max(p[1] for p in polygon) < min(p[1] for p in POND_OUTLINE) or
+            min(p[1] for p in polygon) > max(p[1] for p in POND_OUTLINE)):
+        return [polygon]
+    remainder, pieces = polygon, []
+    for i, a in enumerate(POND_OUTLINE):
+        b = POND_OUTLINE[(i + 1) % len(POND_OUTLINE)]
+        inside, outside = [], []
+        if len(remainder) < 3:
+            break
+        prev = remainder[-1]
+        dp = (b[0] - a[0]) * (prev[1] - a[1]) - (b[1] - a[1]) * (prev[0] - a[0])
+        for curr in remainder:
+            dc = (b[0] - a[0]) * (curr[1] - a[1]) - (b[1] - a[1]) * (curr[0] - a[0])
+            if (dp >= 0.0) != (dc >= 0.0):
+                t = dp / (dp - dc)
+                hit = (prev[0] + t * (curr[0] - prev[0]),
+                       prev[1] + t * (curr[1] - prev[1]))
+                inside.append(hit)
+                outside.append(hit)
+            (inside if dc >= 0.0 else outside).append(curr)
+            prev, dp = curr, dc
+        if len(outside) >= 3:
+            pieces.append(outside)
+        remainder = inside
+    return pieces
+
+
+def ground_faces(geo, polygon, index=0, lift=0.0):
+    # Convex pieces can be triangulated as a fan; discard boundary slivers.
+    for i in range(1, len(polygon) - 1):
+        a, b, c = polygon[0], polygon[i], polygon[i + 1]
+        area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        if abs(area) > 1e-9:
+            geo.face([(x, y, terrain_z(x, y) + lift) for x, y in (a, b, c)], index)
+
+
+# ---------------- ground with actual pool and pond openings ------------------
+progress('2/5: building lots, preserve ground, recessed pond and curved street.')
+# The original frontage is retained. Only the wooded rear expands sideways.
 YJOIN = FRONT - FRONT_SETBACK + 0.7
 geo = Geo()
-x = XMIN
-while x < XMAX - 1e-7:
-    nx = min(x + GROUND_GRID, XMAX)
-    y = YJOIN
-    while y < YMAX - 1e-7:
-        ny = min(y + GROUND_GRID, YMAX)
-        for a, b, c, d in subtract_rect((x, y, nx, ny), POOL_CUTOUT):
-            midx, midy = (a + c) / 2, (b + d) / 2
-            dist = midy - preserve_edge(midx)
-            index = 0 if dist < -2.0 else (1 if dist < 2.0 else 2)
-            p = [(a, b, terrain_z(a, b)), (c, b, terrain_z(c, b)),
-                 (c, d, terrain_z(c, d)), (a, d, terrain_z(a, d))]
-            # Triangles avoid nonplanar quads on the gently undulating ground.
-            geo.face([p[0], p[1], p[2]], index)
-            geo.face([p[0], p[2], p[3]], index)
-        y = ny
-    x = nx
-geo.finish('continuous cleared lots and preserve floor - pool cutout',
+regions = [(XMIN, YJOIN, XMAX, YMAX)]
+if PRESERVE_XMIN < XMIN:
+    regions.append((PRESERVE_XMIN, REAR_EXTENSION_Y, XMIN, YMAX))
+if PRESERVE_XMAX > XMAX:
+    regions.append((XMAX, REAR_EXTENSION_Y, PRESERVE_XMAX, YMAX))
+for x0, y0, x1, y1 in regions:
+    x = x0
+    while x < x1 - 1e-7:
+        nx = min(x + GROUND_GRID, x1)
+        y = y0
+        while y < y1 - 1e-7:
+            ny = min(y + GROUND_GRID, y1)
+            for a, b, c, d in subtract_rect((x, y, nx, ny), POOL_CUTOUT):
+                cell = [(a, b), (c, b), (c, d), (a, d)]
+                for polygon in subtract_pond(cell):
+                    midx = sum(p[0] for p in polygon) / len(polygon)
+                    midy = sum(p[1] for p in polygon) / len(polygon)
+                    dist = midy - preserve_edge(midx)
+                    index = 0 if dist < -2.0 else (1 if dist < 2.0 else 2)
+                    if dist > 3.0 and in_corridor(midx, midy):
+                        index = 1
+                    ground_faces(geo, polygon, index)
+            y = ny
+        x = nx
+geo.finish('continuous lots and expanded preserve - pool and pond cutouts',
            [M['grass'], M['edge'], M['floor']], 'Ground and open lots')
+
+
+# ------------------------ engineered retention basin -------------------------
+if BUILD_RETENTION_POND:
+    water_z = GROUND_Z - POND_WATER_BELOW_GRADE
+    crest_z = GROUND_Z + POND_BERM_HEIGHT
+    # Densify matching rings to seat the outer grassy toe on the terrain.
+    def pond_ring(offset, height=None):
+        corners = pond_outline(offset)
+        result = []
+        for i, a in enumerate(corners):
+            b = corners[(i + 1) % len(corners)]
+            for j in range(48):
+                t = j / 48
+                x, y = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+                result.append((x, y, terrain_z(x, y) if height is None else height))
+        return result
+
+    rings = [pond_ring(0.0, water_z),
+             pond_ring(POND_BANK_WIDTH * 0.42, water_z + (crest_z - water_z) * 0.42),
+             pond_ring(POND_BANK_WIDTH, crest_z),
+             pond_ring(POND_BANK_WIDTH + min(1.6, POND_OUTER_SLOPE * 0.3), crest_z),
+             pond_ring(POND_OUTER_OFFSET)]
+    banks = Geo()
+    for band, (inner, outer) in enumerate(zip(rings, rings[1:])):
+        index = 0 if band == 0 else (1 if band == 1 else 2)
+        for i in range(len(inner)):
+            j = (i + 1) % len(inner)
+            banks.face([inner[i], outer[i], outer[j]], index)
+            banks.face([inner[i], outer[j], inner[j]], index)
+    banks.finish('retention pond - pale lower liner dark upper liner and grassy berm',
+                 [M['pond_pale'], M['pond_dark'], M['berm']], 'Retention pond')
+    water = Geo()
+    water.face([(x, y, water_z) for x, y in pond_outline()])
+    water_obj = water.finish('retention pond - recessed green water',
+                             [M['pond_water']], 'Retention pond')
+    water_obj['estimated_dimensions_m'] = [POND_LENGTH, POND_WIDTH]
+    water_obj['water_depth_below_surrounding_grade_m'] = POND_WATER_BELOW_GRADE
+
+
+# Narrow, lightly wandering maintenance tracks through the utility clearing.
+# Ground underneath remains dry scrub; tracks stop rather than crossing a berm.
+if BUILD_PRESERVE_CORRIDOR and abs(POND_COS) > 0.1:
+    tracks = Geo()
+    x = PRESERVE_XMIN
+    while x < PRESERVE_XMAX - 1e-7:
+        nx = min(x + 1.5, PRESERVE_XMAX)
+        for offset in (-0.95, 0.95):
+            def track_y(px):
+                center = CLEAR_REAR + CORRIDOR_AFTER_CLEARING + (px - CX) * POND_SIN / POND_COS
+                return center + offset + 0.30 * math.sin((px - CX) * 0.065)
+            a, b = track_y(x), track_y(nx)
+            if min(a - preserve_edge(x), b - preserve_edge(nx)) > 5.0 and max(a, b) < YMAX - 1.0:
+                cell = [(x, a - 0.36), (nx, b - 0.36), (nx, b + 0.36), (x, a + 0.36)]
+                for polygon in subtract_pond(cell):
+                    ground_faces(tracks, polygon, lift=0.018)
+        x = nx
+    tracks.finish('paired sandy tracks in preserve clearing', [M['track']], 'Preserve corridor')
 
 
 def ribbon(name, y0, y1, z0, z1, mat, group='Street and access', segments=200):
@@ -594,38 +812,50 @@ SHRUBS = [shrub(SEED + 60 + i) for i in range(6)]
 
 
 # ------------------------ irregular layered preserve -------------------------
-progress('4/5: planting the preserve, keeping house and pool area clear.')
+progress('4/5: planting layered woods around the pond and utility clearing.')
 rng = random.Random(SEED + 100)
 counts = {'trees': 0, 'brush': 0}
-# Jittered spacing with variable height: no rigid rows, no single green wall.
+
+
+def planting_allowed(px, py, canopy):
+    # Exclude the full OUTER berm, not just the waterline, with canopy clearance.
+    return (PRESERVE_XMIN + canopy < px < PRESERVE_XMAX - canopy and
+            preserve_edge(px) + (5.5 if canopy > 4.0 else 0.5) < py < YMAX - canopy and
+            not inside_pond(px, py, canopy) and not in_corridor(px, py, canopy))
+
+
+# Jittered spacing and broad density patches break up rows. Far trees are sparser;
+# shared meshes keep the expanded aerial setting modest.
 if TREE_DENSITY * VEGETATION_MULTIPLIER > 0:
     spacing = 1.0 / math.sqrt(TREE_DENSITY * VEGETATION_MULTIPLIER)
-    x = XMIN + 5.0
-    while x < XMAX - 5.0:
-        y = CLEAR_REAR - 4.0
-        while y < YMAX - 5.0:
+    x = PRESERVE_XMIN + 7.5
+    while x < PRESERVE_XMAX - 7.5:
+        y = CLEAR_REAR - 4.0 + rng.uniform(0.0, spacing)
+        while y < YMAX - 7.5:
             px = x + rng.uniform(-0.38, 0.38) * spacing
             py = y + rng.uniform(-0.38, 0.38) * spacing
-            # Reserve ample canopy clearance from cleared lawn and model edges.
-            if (XMIN + 5 < px < XMAX - 5 and
-                    preserve_edge(px) + 5.0 < py < YMAX - 5):
-                if rng.random() < 0.92:
+            if planting_allowed(px, py, 7.5):
+                density = 0.84 + 0.13 * math.sin(px * 0.065 + py * 0.035)
+                if py > POND_CY + POND_WIDTH / 2:
+                    density *= 0.72
+                if rng.random() < density:
                     chance = rng.random()
-                    library = BROAD if chance < 0.67 else (PINES if chance < 0.86 else PALMS)
+                    library = BROAD if chance < 0.55 else (PINES if chance < 0.85 else PALMS)
                     asset = rng.choice(library)
                     s = rng.uniform(0.72, 1.20)
+                    height_scale = rng.uniform(0.88, 1.15)
                     place('preserve tree %04d' % counts['trees'], asset, 'Preserve trees',
                           (px, py, terrain_z(px, py)), rng.random() * math.tau,
-                          (s, s * rng.uniform(0.90, 1.08), s * rng.uniform(0.92, 1.12)))
+                          (s, s * rng.uniform(0.90, 1.08), s * height_scale))
                     counts['trees'] += 1
             y += spacing
         x += spacing
 
 
 def plant_brush(px, py, edge=False):
-    if not (XMIN + 2 < px < XMAX - 2 and preserve_edge(px) + 0.5 < py < YMAX - 2):
+    if not planting_allowed(px, py, 3.2):
         return
-    asset = rng.choice(LOW_PALMS if rng.random() < 0.42 else SHRUBS)
+    asset = rng.choice(LOW_PALMS if rng.random() < 0.52 else SHRUBS)
     s = rng.uniform(0.65, 1.15) if edge else rng.uniform(0.8, 1.55)
     place('brush clump %04d' % counts['brush'], asset, 'Preserve brush',
           (px, py, terrain_z(px, py)), rng.random() * math.tau,
@@ -634,27 +864,75 @@ def plant_brush(px, py, edge=False):
 
 
 if VEGETATION_MULTIPLIER > 0:
-    # Two ragged near-edge bands conceal bare trunks from patio-height views.
+    # Two ragged near-edge bands give patio views a believable palmetto fringe.
     for band in (1.6, 4.0):
-        x = XMIN + 2.0
-        while x < XMAX - 2:
+        x = PRESERVE_XMIN + 3.2
+        while x < PRESERVE_XMAX - 3.2:
             px = x + rng.uniform(-0.35, 0.35)
             plant_brush(px, preserve_edge(px) + band + rng.uniform(-0.45, 0.45), True)
             x += rng.uniform(1.3, 2.4) / math.sqrt(VEGETATION_MULTIPLIER)
-    # Scatter understory with broad density variation rather than lawn-wide noise.
-    amount = int((XMAX - XMIN) * PRESERVE_DEPTH * BRUSH_DENSITY * VEGETATION_MULTIPLIER)
+    # Understory excludes the entire basin and maintenance corridor.
+    area = (PRESERVE_XMAX - PRESERVE_XMIN) * (YMAX - CLEAR_REAR)
+    amount = int(area * BRUSH_DENSITY * VEGETATION_MULTIPLIER)
     for i in range(amount):
-        px, py = rng.uniform(XMIN + 2, XMAX - 2), rng.uniform(CLEAR_REAR - 4, YMAX - 2)
-        density = 0.70 + 0.25 * math.sin(px * 0.17) * math.cos(py * 0.13)
+        px = rng.uniform(PRESERVE_XMIN + 3.2, PRESERVE_XMAX - 3.2)
+        py = rng.uniform(CLEAR_REAR - 4, YMAX - 3.2)
+        density = 0.66 + 0.25 * math.sin(px * 0.17) * math.cos(py * 0.13)
+        if py > POND_CY:
+            density *= 0.60
         if rng.random() < density:
             plant_brush(px, py)
+    # Scrub along clearing margins prevents a ruler-straight forest wall.
+    if BUILD_PRESERVE_CORRIDOR and abs(POND_COS) > 0.1:
+        x = PRESERVE_XMIN + 4.0
+        while x < PRESERVE_XMAX - 4.0:
+            center = CLEAR_REAR + CORRIDOR_AFTER_CLEARING + (x - CX) * POND_SIN / POND_COS
+            for side in (-1, 1):
+                py = center + side * (CORRIDOR_WIDTH / 2 + rng.uniform(3.3, 5.0)) / abs(POND_COS)
+                plant_brush(x, py, True)
+            x += rng.uniform(2.0, 3.8) / math.sqrt(VEGETATION_MULTIPLIER)
+
+
+# ----------------------- photo-inspired utility corridor ----------------------
+if BUILD_PRESERVE_CORRIDOR and BUILD_PRESERVE_UTILITY_POLES and abs(POND_COS) > 0.1:
+    poles, wires = Geo(), Geo()
+    previous = None
+    x = PRESERVE_XMIN + 15.0
+    while x < PRESERVE_XMAX - 12.0:
+        y = (CLEAR_REAR + CORRIDOR_AFTER_CLEARING + (x - CX) * POND_SIN / POND_COS
+             + (CORRIDOR_WIDTH / 2 - 1.1) / abs(POND_COS))
+        if (preserve_edge(x) + 8.0 < y < YMAX - 4.0 and not inside_pond(x, y, 2.0)):
+            z = terrain_z(x, y)
+            top = Vector((x, y, z + 11.5))
+            cross = Vector((-POND_SIN, POND_COS, 0))
+            poles.branch((x, y, z - 0.15), top + Vector((0, 0, 0.5)), 0.14, 0.085, sides=8)
+            poles.branch(top - cross * 1.25, top + cross * 1.25, 0.065, sides=6)
+            if previous is not None:
+                # Skip a span if an adjusted layout would take it over the pond.
+                span_points = [previous.lerp(top, i / 12) for i in range(13)]
+                if not any(inside_pond(p.x, p.y, 2.0) for p in span_points):
+                    for offset in (-1.0, 0.0, 1.0):
+                        for i in range(12):
+                            a, b = span_points[i].copy(), span_points[i + 1].copy()
+                            a += cross * offset
+                            b += cross * offset
+                            ta, tb = i / 12, (i + 1) / 12
+                            a.z -= 4.0 * 0.65 * ta * (1.0 - ta)
+                            b.z -= 4.0 * 0.65 * tb * (1.0 - tb)
+                            wires.branch(a, b, 0.012, sides=4)
+            previous = top
+        else:
+            previous = None
+        x += 38.0
+    poles.finish('simple pale poles along preserve clearing', [M['pole']], 'Preserve corridor')
+    wires.finish('three lightly sagging utility lines', [M['wire']], 'Preserve corridor')
 
 
 # -------------------------- restrained roadside detail -----------------------
 progress('5/5: adding restrained street details and finishing.')
 if BUILD_SMALL_STREET_DETAILS:
     # Sparse simple lamps like those visible along the cleared frontage.
-    # Geometry only; no new light objects or invented utility networks.
+    # Geometry only; no new light objects or frontage utility networks.
     g = Geo()
     for offset in (-2.5, 0.5, 3.5):
         x = CX + offset * LOT_WIDTH
@@ -683,6 +961,9 @@ ROOT['brush_instances'] = counts['brush']
 bpy.context.view_layer.update()
 progress('Done: %d trees, %d brush clumps. House/pool data untouched.' %
          (counts['trees'], counts['brush']))
+if BUILD_RETENTION_POND:
+    progress('Retention pond: %.0f x %.0f m water; pale/dark liner, grassy berm and actual ground opening.' %
+             (POND_LENGTH, POND_WIDTH))
 progress('All layout dimensions are estimates; adjust controls at the top as needed.')
 progress('No camera, lighting, world, unit or selection changes.')
 progress('All surface materials are lit; procedural color mixing disabled.')
